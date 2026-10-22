@@ -14,6 +14,12 @@ public sealed record ModuleManifest
     public int RefreshSeconds { get; init; }
     public IReadOnlyList<string> Platforms { get; init; } = [];
     public bool RequiresAdmin { get; init; }
+
+    /// <summary>
+    /// Optional, in English: what the module returns. Used as the MCP tool description,
+    /// which is what lets an AI pick the right tool.
+    /// </summary>
+    public string? Description { get; init; }
 }
 
 /// <summary>

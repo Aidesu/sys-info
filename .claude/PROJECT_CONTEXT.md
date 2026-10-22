@@ -74,7 +74,8 @@ Le dossier `Modules/` est copié à côté de l'exécutable (`CopyToOutputDirect
   "order": 10,
   "refreshSeconds": 2,
   "platforms": ["windows", "linux"],
-  "requiresAdmin": false
+  "requiresAdmin": false,
+  "description": "CPU model, core count, current usage and per-core load."
 }
 ```
 
@@ -87,6 +88,7 @@ Le dossier `Modules/` est copié à côté de l'exécutable (`CopyToOutputDirect
 | `refreshSeconds` | intervalle de rafraîchissement ; `0` = manuel uniquement |
 | `platforms` | OS supportés : `windows`, `linux` |
 | `requiresAdmin` | `true` si des droits élevés sont nécessaires |
+| `description` | facultatif, **en anglais** : ce que renvoie le module. Sert de description à l'outil MCP `get_<id>` (c'est elle qui permet à l'IA de choisir l'outil) ; à défaut, une description générique est construite à partir du titre. Ajouté au contrat le 2026-10-22. |
 
 ### 4.2 Le `.psm1`
 
@@ -95,7 +97,7 @@ Chaque module expose **une seule fonction publique** : `Get-ModuleData`.
 - Elle gère elle-même les différences d'OS avec `$IsWindows` / `$IsLinux`.
 - Elle **retourne des objets**, jamais de texte formaté : pas de `Write-Host`, pas de `Format-Table`.
 - Elle ne demande aucune interaction (pas de `Read-Host`, pas de confirmation).
-- Elle doit être rapide (< 500 ms visé) ; ce qui est lent va dans une section à rafraîchissement manuel.
+- Elle doit être rapide (< 500 ms visé) et sobre, puisqu'elle tourne en permanence : ce qui change peu (DNS, routes, pilotes, liste des processus…) est mis en cache dans le module (`$script:`, fonction `Get-Cached`) et relu toutes les 10 à 30 s ; seules les mesures en direct sont relues à chaque appel.
 - En cas d'échec partiel, elle renvoie ce qu'elle peut et signale l'erreur dans une section, sans tout faire planter.
 
 ### 4.3 Format de retour
@@ -117,6 +119,7 @@ function Get-ModuleData {
                 Max   = 100
                 Warning  = 75   # facultatif : seuil Attention (même unité que Value)
                 Critical = 90   # facultatif : seuil Critique
+                Detail   = '3,92 GHz · 16 threads'   # facultatif : ligne courte sous la valeur
             }
             [PSCustomObject]@{
                 Title   = 'Par cœur'
@@ -137,10 +140,23 @@ Export-ModuleMember -Function Get-ModuleData
 | `KeyValue` | infos fixes (modèle, version, uptime) | liste clé → valeur |
 | `Metric` | valeur numérique qui évolue | jauge + graphique d'historique |
 | `Table` | listes (processus, disques, interfaces) | tableau triable |
+| `Usage` | remplissages (volumes, quotas) | une jauge par ligne, badge au-delà des seuils |
 
 Un nouveau type de section = modification du C# (Model + DataTemplate). Ne pas en inventer côté PowerShell sans l'ajouter côté interface.
 
 **Seuils d'une `Metric`** (facultatifs, ajoutés au contrat le 2026-10-22) : `Warning` et `Critical`, dans la même unité que `Value`. Au-delà, la jauge et l'historique prennent la couleur d'état, un badge « Attention » / « Critique » s'affiche, et l'onglet du module porte l'état le plus grave de ses Metric. Sans seuils, aucune couleur d'état. Seuils par défaut conseillés : CPU 75 / 90 %, remplissage disque 85 / 95 %, température 80 / 90 °C.
+
+**`Detail` d'une `Metric`** (facultatif, ajouté au contrat le 2026-10-22) : une ligne courte de contexte affichée sous la valeur, déjà rédigée en français (« 4,6 GiB disponibles sur 31,2 GiB »).
+
+**Affichage des `Metric`** : les sections `Metric` consécutives s'affichent côte à côte (jusqu'à 3 par ligne), et sous chacune son graphique d'historique (60 dernières valeurs, axes, info-bulle, moyenne / minimum / maximum). Pour les grouper, les placer à la suite dans `Sections`.
+
+**Ajouts facultatifs du 2026-10-22 (module Réseau)** :
+
+- `Subtitle` (à côté de `Sections`) : sous-titre de l'en-tête de page, pour savoir où l'on est (« eno2 · 192.168.1.20 · passerelle 192.168.1.1 »).
+- `Icon` sur une section : nom d'icône affiché devant le titre de la carte. Noms disponibles (`Styles/Icons.axaml`) : `apps_list`, `arrow_clockwise`, `arrow_down`, `arrow_download`, `arrow_routing`, `arrow_sort`, `arrow_swap`, `arrow_up`, `board`, `checkmark_circle`, `chevron_down`, `chevron_up`, `desktop`, `developer_board`, `dismiss`, `error_circle`, `globe`, `hard_drive`, `info`, `link`, `lock_closed`, `network_check`, `panel_left_contract`, `panel_left_expand`, `pause`, `play`, `plug_connected`, `plug_disconnected`, `pulse`, `ram`, `re_order_dots_vertical`, `router`, `search`, `server`, `settings`, `shield_checkmark`, `temperature`, `timer`, `top_speed`, `warning`, `wifi_1`, `wifi_off`. Un nom inconnu est remplacé par `board` et signalé sur stderr.
+- Metric à deux séries : `Label` (nom de la série principale) et `Secondary = @{ Label = 'Émission'; Value = 1.2 }`. Elle s'affiche en graphique large (deux par ligne) avec une légende actuel / moyenne / maximum ; les seuils portent sur la série principale. Une valeur `$null` laisse un trou dans la courbe (ex. ping perdu).
+
+**`Usage`** (ajouté au contrat le 2026-10-22, module Stockage) : `Items` = liste d'éléments `@{ Label; Detail; Value; Max; Unit; Warning; Critical; Text }` — `Label` (ex. `/`), `Detail` sous le libellé (`btrfs · nvme0n1p3`), `Value` sur `Max` dans `Unit`, seuils facultatifs dans la même unité, `Text` libre sous la valeur (« 100 GiB libres sur 1,8 TiB »). L'état le plus grave des lignes remonte sur l'onglet.
 
 **`Table`** : `Columns` (libellés) et `Rows` (un tableau de valeurs par ligne, dans l'ordre des colonnes). Une colonne dont toutes les valeurs sont des nombres est alignée à droite, en mono, et formatée à la française ; renvoyer des **nombres**, pas des chaînes déjà formatées, pour qu'elle trie correctement.
 
@@ -151,7 +167,7 @@ Un nouveau type de section = modification du C# (Model + DataTemplate). Ne pas e
 - Bindings compilés : toujours `x:DataType` sur les vues.
 - Aucun appel PowerShell sur le thread UI : tout passe par `Task.Run` / async.
 - Réutiliser un runspace par module plutôt que d'en recréer un à chaque rafraîchissement.
-- Seul l'**onglet actif** se rafraîchit automatiquement ; les autres sont en pause.
+- **Tous les modules** se chargent au lancement et se rafraîchissent en arrière-plan à leur rythme (`refreshSeconds`), affichés ou non : historiques, statistiques et états des onglets sont prêts quand on ouvre une page (règle changée le 2026-10-22). Pause pour tous quand la fenêtre est réduite (réglage).
 - Un module qui plante n'affecte jamais les autres : erreur affichée dans son onglet uniquement.
 - `ExecutionPolicy = Bypass` dans l'`InitialSessionState` (sinon blocage sous Windows).
 - Nommage du code en anglais, textes de l'interface en français.

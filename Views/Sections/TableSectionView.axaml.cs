@@ -60,7 +60,7 @@ public partial class TableSectionView : UserControl
         foreach (var column in vm.Columns)
         {
             grid.ColumnDefinitions.Add(column.Index == stretch
-                ? new ColumnDefinition(1, GridUnitType.Star)
+                ? new ColumnDefinition(1, GridUnitType.Star) { MinWidth = 140 }
                 : new ColumnDefinition(GridLength.Auto) { MinWidth = 88 });
         }
         if (stretch < 0)

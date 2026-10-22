@@ -1,0 +1,10 @@
+{
+  "id": "storage",
+  "title": "Stockage",
+  "icon": "hard_drive",
+  "order": 30,
+  "refreshSeconds": 2,
+  "platforms": ["windows", "linux"],
+  "requiresAdmin": false,
+  "description": "Storage of this computer: fill level of each volume (used, free, size, with warning at 85 % and critical at 95 %), live disk activity (read / write, MiB/s), physical disks (model, type, size, SMART health, temperature, wear, power-on hours), detailed SMART data per disk (spare, data read and written, power cycles, unsafe shutdowns, media errors), partitions (size, file system, label, mount point), file system error counters, and storage errors from the system log over the last 7 days."
+}

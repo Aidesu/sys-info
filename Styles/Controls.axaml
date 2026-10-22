@@ -5,7 +5,8 @@
   Bouton : secondaire par défaut ; Classes="Primary", "Ghost", "Icon" (icône seule), "Small" (compact).
 -->
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="using:SysInfo.Controls">
 
     <Styles.Resources>
         <ResourceDictionary>
@@ -152,6 +153,10 @@
             <SolidColorBrush x:Key="SliderThumbBackground" Color="{DynamicResource AccentColor}" />
             <SolidColorBrush x:Key="SliderThumbBackgroundPointerOver" Color="{DynamicResource AccentHoverColor}" />
             <SolidColorBrush x:Key="SliderThumbBackgroundPressed" Color="{DynamicResource AccentHoverColor}" />
+
+            <!-- Aire sous une courbe en état Attention / Critique : couleur d'état translucide, comme ChartArea -->
+            <SolidColorBrush x:Key="WarningArea" Color="{DynamicResource WarningColor}" Opacity="0.14" />
+            <SolidColorBrush x:Key="DangerArea" Color="{DynamicResource DangerColor}" Opacity="0.14" />
 
             <!-- Info-bulle : SurfaceElevated, filet Border -->
             <SolidColorBrush x:Key="ToolTipBackground" Color="{DynamicResource SurfaceElevatedColor}" />
@@ -303,7 +308,9 @@
         <Setter Property="Background" Value="{DynamicResource SurfaceHover}" />
         <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
     </Style>
-    <Style Selector=":is(Control).Animate Border.Skeleton">
+    <!-- Seulement sous un conteneur .Pulse (squelette affiché) : une animation infinie sur un squelette masqué
+         continuerait de redessiner la fenêtre en permanence. -->
+    <Style Selector=":is(Control).Animate :is(Control).Pulse Border.Skeleton">
         <Style.Animations>
             <Animation Duration="0:0:1.6" IterationCount="INFINITE" PlaybackDirection="Alternate" Easing="SineEaseInOut">
                 <KeyFrame Cue="0%">
@@ -395,6 +402,71 @@
     </Style>
     <Style Selector="Border.TableRow:pointerover">
         <Setter Property="Background" Value="{DynamicResource SurfaceHover}" />
+    </Style>
+
+    <!-- Jauge et graphiques : Accent sous les seuils ; dans une carte Warning / Critical, la couleur d'état -->
+    <Style Selector="c|Meter">
+        <Setter Property="Fill" Value="{DynamicResource Accent}" />
+        <Setter Property="Track" Value="{DynamicResource Border}" />
+    </Style>
+    <Style Selector="Border.Warning c|Meter">
+        <Setter Property="Fill" Value="{DynamicResource Warning}" />
+    </Style>
+    <Style Selector="Border.Critical c|Meter">
+        <Setter Property="Fill" Value="{DynamicResource Danger}" />
+    </Style>
+    <Style Selector="c|Meter.Warning">
+        <Setter Property="Fill" Value="{DynamicResource Warning}" />
+    </Style>
+    <Style Selector="c|Meter.Critical">
+        <Setter Property="Fill" Value="{DynamicResource Danger}" />
+    </Style>
+    <Style Selector="c|LineChart">
+        <Setter Property="Stroke" Value="{DynamicResource Accent}" />
+        <Setter Property="Fill" Value="{DynamicResource ChartArea}" />
+        <Setter Property="GridBrush" Value="{DynamicResource ChartGrid}" />
+        <Setter Property="LabelBrush" Value="{DynamicResource TextMuted}" />
+        <Setter Property="TextBrush" Value="{DynamicResource TextPrimary}" />
+        <Setter Property="CursorBrush" Value="{DynamicResource BorderStrong}" />
+        <Setter Property="SurfaceBrush" Value="{DynamicResource Surface}" />
+        <Setter Property="TipBackground" Value="{DynamicResource SurfaceElevated}" />
+        <Setter Property="TipBorder" Value="{DynamicResource Border}" />
+        <Setter Property="LabelFont" Value="{StaticResource FontMono}" />
+    </Style>
+    <Style Selector="c|LineChart">
+        <Setter Property="Stroke2" Value="{DynamicResource ChartSecondary}" />
+    </Style>
+    <Style Selector="Border.Warning c|LineChart">
+        <Setter Property="Stroke" Value="{DynamicResource Warning}" />
+        <Setter Property="Fill" Value="{DynamicResource WarningArea}" />
+    </Style>
+    <Style Selector="Border.Critical c|LineChart">
+        <Setter Property="Stroke" Value="{DynamicResource Danger}" />
+        <Setter Property="Fill" Value="{DynamicResource DangerArea}" />
+    </Style>
+
+    <!-- Icône devant le titre d'une carte : 16 px, TextSecondary (repère visuel, jamais seule porteuse d'information) -->
+    <Style Selector="PathIcon.CardIcon">
+        <Setter Property="Width" Value="{StaticResource IconSize}" />
+        <Setter Property="Height" Value="{StaticResource IconSize}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Icône de page dans l'en-tête : pastille AccentMuted 32 px, icône Accent 20 px (comme l'onglet actif) -->
+    <Style Selector="Border.PageIcon">
+        <Setter Property="Width" Value="32" />
+        <Setter Property="Height" Value="32" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+        <Setter Property="Background" Value="{DynamicResource AccentMuted}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.PageIcon > PathIcon">
+        <Setter Property="Width" Value="20" />
+        <Setter Property="Height" Value="20" />
+        <Setter Property="Foreground" Value="{DynamicResource Accent}" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
 </Styles>

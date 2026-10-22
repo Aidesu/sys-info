@@ -28,7 +28,12 @@
                 Padding="{StaticResource HeaderPadding}"
                 BorderBrush="{DynamicResource Border}"
                 BorderThickness="0,0,0,1">
-            <TextBlock Classes="PageTitle" Text="Paramètres" VerticalAlignment="Center" />
+            <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space12}" VerticalAlignment="Center">
+                <Border Classes="PageIcon">
+                    <PathIcon Data="{StaticResource Icon.settings}" />
+                </Border>
+                <TextBlock Classes="PageTitle" Text="Paramètres" VerticalAlignment="Center" />
+            </StackPanel>
         </Border>
 
         <ScrollViewer Padding="{StaticResource PagePadding}">

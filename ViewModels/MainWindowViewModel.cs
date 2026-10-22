@@ -29,6 +29,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         FooterPages = [Settings];
 
         SelectedTab = Tabs.FirstOrDefault();
+
+        // Every module starts collecting now, not when its page is first opened.
+        foreach (var tab in Tabs)
+            tab.Start();
         if (SelectedTab is null)
             SelectedFooterPage = Settings;
     }

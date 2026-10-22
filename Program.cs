@@ -1,6 +1,7 @@
 ﻿using Avalonia;
 using Avalonia.Media;
 using System;
+using System.Linq;
 
 namespace SysInfo;
 
@@ -10,8 +11,14 @@ sealed class Program
     // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
     // yet and stuff might break.
     [STAThread]
-    public static void Main(string[] args) => BuildAvaloniaApp()
-        .StartWithClassicDesktopLifetime(args);
+    public static int Main(string[] args)
+    {
+        // `SysInfo --mcp`: MCP server on stdin/stdout for AI agents, no window.
+        if (args.Contains("--mcp"))
+            return Mcp.McpServerHost.RunAsync().GetAwaiter().GetResult();
+
+        return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+    }
 
     // Avalonia configuration, don't remove; also used by visual designer.
     public static AppBuilder BuildAvaloniaApp()

@@ -1,0 +1,67 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="using:SysInfo.Converters"
+             xmlns:vm="using:SysInfo.ViewModels.Sections"
+             xmlns:c="using:SysInfo.Controls"
+             x:Class="SysInfo.Views.Sections.UsageSectionView"
+             x:DataType="vm:UsageSectionViewModel">
+
+    <!-- Remplissage (design system, Meter) : une ligne par élément — libellé et détail, jauge, utilisé / total
+         et texte libre, puis le pourcentage ou, au-delà des seuils, le badge d'état -->
+    <Border Classes="Card">
+        <StackPanel Spacing="{StaticResource Space16}">
+            <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space8}">
+                <PathIcon Classes="CardIcon" IsVisible="{Binding HasIcon}"
+                          Data="{Binding Icon, Converter={x:Static conv:IconConverter.Instance}}" />
+                <TextBlock Classes="CardTitle" Text="{Binding Title}" VerticalAlignment="Center" />
+            </StackPanel>
+
+            <ItemsControl ItemsSource="{Binding Rows}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Spacing="{StaticResource Space16}" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:UsageRow">
+                        <Grid ColumnDefinitions="220,*,200,104" ColumnSpacing="16"
+                              Classes.Warning="{Binding IsWarning}" Classes.Critical="{Binding IsCritical}">
+                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Classes="Value" Text="{Binding Label}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Label}" />
+                                <TextBlock Classes="Caption" Text="{Binding Detail}" IsVisible="{Binding HasDetail}"
+                                           TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Detail}" />
+                            </StackPanel>
+
+                            <c:Meter Grid.Column="1" Percent="{Binding Percent}" Radius="4" VerticalAlignment="Center"
+                                     Classes.Warning="{Binding IsWarning}" Classes.Critical="{Binding IsCritical}" />
+
+                            <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Classes="Value" Text="{Binding ValueText}" HorizontalAlignment="Right" />
+                                <TextBlock Classes="Caption" Text="{Binding Text}" IsVisible="{Binding HasText}"
+                                           HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+
+                            <Panel Grid.Column="3" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                <TextBlock Classes="ValueSmall" Text="{Binding PercentText}" IsVisible="{Binding IsNormal}"
+                                           HorizontalAlignment="Right" />
+                                <Border Classes="Badge Warning" IsVisible="{Binding IsWarning}">
+                                    <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space4}">
+                                        <PathIcon Data="{StaticResource Icon.warning}" />
+                                        <TextBlock Classes="Label" Text="{Binding PercentText}" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Classes="Badge Critical" IsVisible="{Binding IsCritical}">
+                                    <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space4}">
+                                        <PathIcon Data="{StaticResource Icon.error_circle}" />
+                                        <TextBlock Classes="Label" Text="{Binding PercentText}" />
+                                    </StackPanel>
+                                </Border>
+                            </Panel>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </Border>
+
+</UserControl>

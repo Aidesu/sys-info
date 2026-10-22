@@ -13,14 +13,14 @@ namespace SysInfo.ViewModels;
 
 /// <summary>
 /// One sidebar tab = one module: its data, its errors and its refresh cycle.
-/// Only the active tab refreshes automatically, and not while paused.
+/// Every module refreshes in the background, shown or not (except while paused), so its history is ready.
 /// </summary>
 public partial class ModuleTabViewModel : NavPageViewModel, IDisposable
 {
     private readonly LoadedModule _module;
     private readonly DispatcherTimer? _timer;
     private PowerShellService? _powerShell;
-    private bool _loadedOnce;
+    private bool _started;
 
     public ModuleTabViewModel(LoadedModule module)
     {
@@ -39,6 +39,57 @@ public partial class ModuleTabViewModel : NavPageViewModel, IDisposable
 
     [ObservableProperty]
     public partial IReadOnlyList<SectionViewModel> Sections { get; private set; } = [];
+
+    /// <summary>
+    /// What the page shows, in order: each section, except that consecutive Metric sections form one
+    /// <see cref="MetricGroupViewModel"/> (cards side by side, charts underneath). Rebuilt only when the
+    /// list of sections changes, not on each refresh.
+    /// </summary>
+    [ObservableProperty]
+    public partial IReadOnlyList<ViewModelBase> Blocks { get; private set; } = [];
+
+    partial void OnSectionsChanged(IReadOnlyList<SectionViewModel> value)
+    {
+        // Consecutive single-series Metric → MetricGroup (compact cards in a row, charts under them);
+        // consecutive two-series Metric → ChartGroup (wide charts, two per row).
+        var blocks = new List<ViewModelBase>();
+        var metrics = new List<MetricSectionViewModel>();
+        var charts = new List<MetricSectionViewModel>();
+
+        void Flush()
+        {
+            if (metrics.Count > 0)
+                blocks.Add(new MetricGroupViewModel([.. metrics]));
+            if (charts.Count > 0)
+                blocks.Add(new ChartGroupViewModel([.. charts]));
+            metrics.Clear();
+            charts.Clear();
+        }
+
+        foreach (var section in value)
+        {
+            if (section is MetricSectionViewModel metric)
+            {
+                var target = metric.IsDual ? charts : metrics;
+                if ((metric.IsDual ? metrics : charts).Count > 0)
+                    Flush();
+                target.Add(metric);
+                continue;
+            }
+            Flush();
+            blocks.Add(section);
+        }
+        Flush();
+
+        Blocks = blocks;
+    }
+
+    /// <summary>Optional subtitle from the module, shown after the page title ("wlp4s0 · 192.168.1.42").</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSubtitle))]
+    public partial string? Subtitle { get; private set; }
+
+    public bool HasSubtitle => !string.IsNullOrEmpty(Subtitle);
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasError), nameof(ShowSkeleton))]
@@ -76,13 +127,16 @@ public partial class ModuleTabViewModel : NavPageViewModel, IDisposable
     [ObservableProperty]
     public partial bool IsPaused { get; set; }
 
-    protected override void OnActiveChanged(bool isActive)
+    /// <summary>
+    /// Starts collecting: a first load, then the automatic refresh. Called for every module when the window
+    /// opens, so that history, statistics and tab states are already filled when a page is opened.
+    /// </summary>
+    public void Start()
     {
-        if (isActive && !_loadedOnce)
-        {
-            _loadedOnce = true;
-            RefreshCommand.Execute(null);
-        }
+        if (_started)
+            return;
+        _started = true;
+        RefreshCommand.Execute(null);
         UpdateTimer();
     }
 
@@ -90,7 +144,7 @@ public partial class ModuleTabViewModel : NavPageViewModel, IDisposable
 
     private void UpdateTimer()
     {
-        if (IsActive && !IsPaused)
+        if (_started && !IsPaused)
             _timer?.Start();
         else
             _timer?.Stop();
@@ -112,6 +166,7 @@ public partial class ModuleTabViewModel : NavPageViewModel, IDisposable
             _powerShell ??= await Task.Run(() => new PowerShellService(_module.ScriptPath));
             var data = await _powerShell.GetModuleDataAsync();
             ApplySections(SectionParser.Parse(data));
+            Subtitle = SectionParser.ParseSubtitle(data);
             ErrorMessage = null;
             LastUpdated = DateTime.Now;
         }
@@ -133,7 +188,7 @@ public partial class ModuleTabViewModel : NavPageViewModel, IDisposable
         if (keys.SequenceEqual(Sections.Select(s => s.Key)))
         {
             for (var i = 0; i < sections.Count; i++)
-                Sections[i].Update(sections[i]);
+                Sections[i].Refresh(sections[i]);
         }
         else
         {
@@ -143,7 +198,7 @@ public partial class ModuleTabViewModel : NavPageViewModel, IDisposable
                 {
                     if (previous.Remove(SectionViewModel.KeyOf(s), out var existing))
                     {
-                        existing.Update(s);
+                        existing.Refresh(s);
                         return existing;
                     }
                     return SectionViewModel.Create(s);

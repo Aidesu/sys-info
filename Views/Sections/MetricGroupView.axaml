@@ -1,0 +1,70 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="using:SysInfo.Converters"
+             xmlns:vm="using:SysInfo.ViewModels.Sections"
+             xmlns:c="using:SysInfo.Controls"
+             x:Class="SysInfo.Views.Sections.MetricGroupView"
+             x:DataType="vm:MetricGroupViewModel">
+
+    <!-- Rangée de cartes Metric de même largeur, puis, aligné sous chacune, le graphique de son historique -->
+    <StackPanel Spacing="{StaticResource Space16}">
+
+        <ItemsControl ItemsSource="{Binding Metrics}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <UniformGrid Columns="{Binding Columns}" ColumnSpacing="16" RowSpacing="16" /> <!-- = Space16 -->
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+        </ItemsControl>
+
+        <ItemsControl ItemsSource="{Binding Metrics}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <UniformGrid Columns="{Binding Columns}" ColumnSpacing="16" RowSpacing="16" />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:MetricSectionViewModel">
+                    <!-- Carte graphique : titre + fenêtre couverte, courbe avec axes et info-bulle, statistiques -->
+                    <Border Classes="Card" Classes.Warning="{Binding IsWarning}" Classes.Critical="{Binding IsCritical}">
+                        <StackPanel Spacing="{StaticResource Space12}">
+                            <Grid ColumnDefinitions="Auto,Auto,*">
+                                <PathIcon Classes="CardIcon" IsVisible="{Binding HasIcon}" Margin="0,0,8,0"
+                                          Data="{Binding Icon, Converter={x:Static conv:IconConverter.Instance}}" />
+                                <TextBlock Grid.Column="1" Classes="CardTitle" Text="{Binding Title}" TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="2" Classes="Caption" Text="{Binding WindowText}"
+                                           VerticalAlignment="Center" Margin="8,1,0,0" TextTrimming="CharacterEllipsis" />
+                            </Grid>
+
+                            <c:LineChart Height="140"
+                                         Values="{Binding History}"
+                                         Times="{Binding HistoryTimes}"
+                                         Maximum="{Binding ChartMaximum}"
+                                         Unit="{Binding Unit}"
+                                         Capacity="{x:Static vm:MetricSectionViewModel.HistoryLength}"
+                                         AutomationProperties.Name="{Binding Title, StringFormat='Historique : {0}'}" />
+
+                            <UniformGrid Columns="3" ColumnSpacing="12" IsVisible="{Binding HasStatistics}">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Classes="Caption" Text="Moyenne" />
+                                    <TextBlock Classes="Value" Text="{Binding AverageText}" />
+                                </StackPanel>
+                                <StackPanel Spacing="2">
+                                    <TextBlock Classes="Caption" Text="Minimum" />
+                                    <TextBlock Classes="Value" Text="{Binding MinimumText}" />
+                                </StackPanel>
+                                <StackPanel Spacing="2">
+                                    <TextBlock Classes="Caption" Text="Maximum" />
+                                    <TextBlock Classes="Value" Text="{Binding MaximumText}" />
+                                </StackPanel>
+                            </UniformGrid>
+                        </StackPanel>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+    </StackPanel>
+
+</UserControl>

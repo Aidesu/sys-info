@@ -1,0 +1,105 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:SysInfo.ViewModels.Sections"
+             xmlns:c="using:SysInfo.Controls"
+             xmlns:conv="using:SysInfo.Converters"
+             x:Class="SysInfo.Views.Sections.ChartGroupView"
+             x:DataType="vm:ChartGroupViewModel">
+
+    <UserControl.Styles>
+        <!-- Pastille de série dans la légende : même couleur que la courbe -->
+        <Style Selector="Border.Swatch">
+            <Setter Property="Width" Value="12" />
+            <Setter Property="Height" Value="3" />
+            <Setter Property="CornerRadius" Value="2" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.Swatch.Primary">
+            <Setter Property="Background" Value="{DynamicResource Accent}" />
+        </Style>
+        <Style Selector="Border.Warning Border.Swatch.Primary">
+            <Setter Property="Background" Value="{DynamicResource Warning}" />
+        </Style>
+        <Style Selector="Border.Critical Border.Swatch.Primary">
+            <Setter Property="Background" Value="{DynamicResource Danger}" />
+        </Style>
+        <Style Selector="Border.Swatch.Secondary">
+            <Setter Property="Background" Value="{DynamicResource ChartSecondary}" />
+        </Style>
+    </UserControl.Styles>
+
+    <!-- Graphiques larges à deux séries, deux par ligne : en-tête (icône, titre, fenêtre, état),
+         courbes, puis légende chiffrée (actuel, moyenne, maximum de chaque série) -->
+    <ItemsControl ItemsSource="{Binding Metrics}">
+        <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+                <UniformGrid Columns="{Binding Columns}" ColumnSpacing="16" RowSpacing="16" /> <!-- = Space16 -->
+            </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:MetricSectionViewModel">
+                <Border Classes="Card" Classes.Warning="{Binding IsWarning}" Classes.Critical="{Binding IsCritical}">
+                    <StackPanel Spacing="{StaticResource Space12}">
+
+                        <DockPanel>
+                            <Border DockPanel.Dock="Right" Classes="Badge Warning" IsVisible="{Binding IsWarning}">
+                                <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space4}">
+                                    <PathIcon Data="{StaticResource Icon.warning}" />
+                                    <TextBlock Classes="Label" Text="{Binding StatusText}" />
+                                </StackPanel>
+                            </Border>
+                            <Border DockPanel.Dock="Right" Classes="Badge Critical" IsVisible="{Binding IsCritical}">
+                                <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space4}">
+                                    <PathIcon Data="{StaticResource Icon.error_circle}" />
+                                    <TextBlock Classes="Label" Text="{Binding StatusText}" />
+                                </StackPanel>
+                            </Border>
+                            <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space8}">
+                                <PathIcon Classes="CardIcon" IsVisible="{Binding HasIcon}"
+                                          Data="{Binding Icon, Converter={x:Static conv:IconConverter.Instance}}" />
+                                <TextBlock Classes="CardTitle" Text="{Binding Title}" VerticalAlignment="Center" />
+                                <TextBlock Classes="Caption" Text="{Binding WindowText}" VerticalAlignment="Center" Margin="0,1,0,0" />
+                            </StackPanel>
+                        </DockPanel>
+
+                        <c:LineChart Height="180"
+                                     Values="{Binding History}"
+                                     Values2="{Binding SecondaryHistory}"
+                                     Label1="{Binding PrimaryLabel}"
+                                     Label2="{Binding SecondaryLabel}"
+                                     Times="{Binding HistoryTimes}"
+                                     Maximum="{Binding ChartMaximum}"
+                                     Unit="{Binding Unit}"
+                                     Capacity="{x:Static vm:MetricSectionViewModel.HistoryLength}"
+                                     AutomationProperties.Name="{Binding Title, StringFormat='Historique : {0}'}" />
+
+                        <!-- Légende chiffrée -->
+                        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="16" RowSpacing="6">
+                            <TextBlock Grid.Column="2" Classes="Caption" Text="Actuel" HorizontalAlignment="Right" />
+                            <TextBlock Grid.Column="3" Classes="Caption" Text="Moyenne" HorizontalAlignment="Right" />
+                            <TextBlock Grid.Column="4" Classes="Caption" Text="Maximum" HorizontalAlignment="Right" />
+
+                            <Border Grid.Row="1" Classes="Swatch Primary" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Classes="Body" Foreground="{DynamicResource TextSecondary}"
+                                       Text="{Binding PrimaryLabel}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Row="1" Grid.Column="2" Classes="Value" Text="{Binding ValueWithUnit}" HorizontalAlignment="Right" />
+                            <TextBlock Grid.Row="1" Grid.Column="3" Classes="Value" Text="{Binding AverageText}" HorizontalAlignment="Right" />
+                            <TextBlock Grid.Row="1" Grid.Column="4" Classes="Value" Text="{Binding MaximumText}" HorizontalAlignment="Right" />
+
+                            <Border Grid.Row="2" Classes="Swatch Secondary" />
+                            <TextBlock Grid.Row="2" Grid.Column="1" Classes="Body" Foreground="{DynamicResource TextSecondary}"
+                                       Text="{Binding SecondaryLabel}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Row="2" Grid.Column="2" Classes="Value" Text="{Binding SecondaryValueWithUnit}" HorizontalAlignment="Right" />
+                            <TextBlock Grid.Row="2" Grid.Column="3" Classes="Value" Text="{Binding SecondaryAverageText}" HorizontalAlignment="Right" />
+                            <TextBlock Grid.Row="2" Grid.Column="4" Classes="Value" Text="{Binding SecondaryMaximumText}" HorizontalAlignment="Right" />
+                        </Grid>
+
+                        <TextBlock Classes="Caption" Text="{Binding Detail}" IsVisible="{Binding HasDetail}"
+                                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Detail}" />
+                    </StackPanel>
+                </Border>
+            </DataTemplate>
+        </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+</UserControl>

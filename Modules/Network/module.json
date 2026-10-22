@@ -1,0 +1,10 @@
+{
+  "id": "network",
+  "title": "Réseau",
+  "icon": "arrow_sort",
+  "order": 20,
+  "refreshSeconds": 2,
+  "platforms": ["windows", "linux"],
+  "requiresAdmin": false,
+  "description": "Network of this computer: live throughput of the main interface (download / upload, Mbit/s) and latency (ms) to the Internet (1.1.1.1) and to the gateway, with packet loss; main connection (interface, Wi-Fi network and signal, IPv4/IPv6, gateway, MAC, link speed), DNS servers, DHCP lease, physical network interfaces, IPv4 routes, listening TCP/UDP ports with their process, established TCP connections, and a traceroute to 1.1.1.1 refreshed every 10 minutes."
+}

@@ -8,7 +8,7 @@ namespace SysInfo.Converters;
 
 /// <summary>
 /// Turns an icon name from module.json ("settings") into its geometry (resource Icon.settings, Styles/Icons.axaml).
-/// Unknown name → the "board" icon, and a warning on stderr.
+/// No name → no icon; unknown name → the "board" icon, and a warning on stderr.
 /// </summary>
 public sealed class IconConverter : IValueConverter
 {
@@ -19,7 +19,9 @@ public sealed class IconConverter : IValueConverter
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         var name = value as string;
-        if (!string.IsNullOrEmpty(name) && TryFind(name, out var geometry))
+        if (string.IsNullOrEmpty(name))
+            return null; // no icon asked (optional section icon)
+        if (TryFind(name, out var geometry))
             return geometry;
 
         Console.Error.WriteLine($"[icons] icône inconnue « {name} », remplacée par « {Fallback} »");

@@ -1,29 +1,37 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:SysInfo.ViewModels"
+             xmlns:conv="using:SysInfo.Converters"
              x:Class="SysInfo.Views.ModuleTabView"
              x:DataType="vm:ModuleTabViewModel">
 
     <DockPanel>
 
-        <!-- En-tête : titre, état d'actualisation, actions -->
+        <!-- En-tête (PageHeader) : icône du module, titre, sous-titre du module ; à droite, état d'actualisation et actions -->
         <Border DockPanel.Dock="Top"
                 Height="{StaticResource HeaderHeight}"
                 Padding="{StaticResource HeaderPadding}"
                 BorderBrush="{DynamicResource Border}"
                 BorderThickness="0,0,0,1">
             <DockPanel>
-                <Button DockPanel.Dock="Right"
-                        Classes="Ghost Icon"
-                        Command="{Binding RefreshCommand}"
-                        ToolTip.Tip="Actualiser"
-                        AutomationProperties.Name="Actualiser"
-                        VerticalAlignment="Center">
-                    <PathIcon Data="{StaticResource Icon.arrow_clockwise}" />
-                </Button>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="{StaticResource Space12}" VerticalAlignment="Center">
+                    <TextBlock Classes="Caption" Text="{Binding StatusLine}" VerticalAlignment="Center" />
+                    <Button Classes="Ghost Icon"
+                            Command="{Binding RefreshCommand}"
+                            ToolTip.Tip="Actualiser"
+                            AutomationProperties.Name="Actualiser"
+                            VerticalAlignment="Center">
+                        <PathIcon Data="{StaticResource Icon.arrow_clockwise}" />
+                    </Button>
+                </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space12}" VerticalAlignment="Center">
+                    <Border Classes="PageIcon">
+                        <PathIcon Data="{Binding Icon, Converter={x:Static conv:IconConverter.Instance}}" />
+                    </Border>
                     <TextBlock Classes="PageTitle" Text="{Binding Title}" VerticalAlignment="Center" />
-                    <TextBlock Classes="Caption" Text="{Binding StatusLine}" VerticalAlignment="Center" Margin="0,3,0,0" />
+                    <TextBlock Classes="Body" Foreground="{DynamicResource TextMuted}" Text="{Binding Subtitle}"
+                               IsVisible="{Binding HasSubtitle}" VerticalAlignment="Center" Margin="0,3,0,0"
+                               TextTrimming="CharacterEllipsis" MaxWidth="560" ToolTip.Tip="{Binding Subtitle}" />
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -52,7 +60,7 @@
                 </Border>
 
                 <!-- Squelette : une carte de valeurs, une carte de métrique -->
-                <StackPanel Spacing="{StaticResource Space16}" IsVisible="{Binding ShowSkeleton}"
+                <StackPanel Spacing="{StaticResource Space16}" IsVisible="{Binding ShowSkeleton}" Classes.Pulse="{Binding ShowSkeleton}"
                             AutomationProperties.Name="Chargement du module">
                     <Border Classes="Card">
                         <StackPanel Spacing="{StaticResource Space12}">
@@ -72,8 +80,9 @@
                     </Border>
                 </StackPanel>
 
-                <!-- Chaque section est rendue par sa vue (ViewLocator : …SectionViewModel → …SectionView) -->
-                <ItemsControl ItemsSource="{Binding Sections}">
+                <!-- Chaque bloc est rendu par sa vue (ViewLocator : …ViewModel → …View) ;
+                     les Metric consécutives forment un MetricGroup (cartes en ligne, graphiques dessous) -->
+                <ItemsControl ItemsSource="{Binding Blocks}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <StackPanel Spacing="{StaticResource Space16}" />

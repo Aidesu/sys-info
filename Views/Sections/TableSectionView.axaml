@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="using:SysInfo.Converters"
              xmlns:vm="using:SysInfo.ViewModels.Sections"
              x:Class="SysInfo.Views.Sections.TableSectionView"
              x:DataType="vm:TableSectionViewModel">
@@ -9,9 +10,16 @@
         <StackPanel>
             <DockPanel Margin="16,16,16,12">
                 <TextBlock DockPanel.Dock="Right" Classes="Caption" Text="{Binding CountText}" VerticalAlignment="Center" />
-                <TextBlock Classes="CardTitle" Text="{Binding Title}" />
+                <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space8}">
+                    <PathIcon Classes="CardIcon" IsVisible="{Binding HasIcon}"
+                              Data="{Binding Icon, Converter={x:Static conv:IconConverter.Instance}}" />
+                    <TextBlock Classes="CardTitle" Text="{Binding Title}" VerticalAlignment="Center" />
+                </StackPanel>
             </DockPanel>
-            <Grid Name="TableGrid" />
+            <!-- Défilement horizontal seulement si les colonnes ne tiennent pas dans la carte -->
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                <Grid Name="TableGrid" />
+            </ScrollViewer>
         </StackPanel>
     </Border>
 

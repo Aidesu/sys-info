@@ -1,0 +1,10 @@
+{
+  "id": "hardware",
+  "title": "Matériel",
+  "icon": "developer_board",
+  "order": 10,
+  "refreshSeconds": 5,
+  "platforms": ["windows", "linux"],
+  "requiresAdmin": false,
+  "description": "Hardware of this computer: live GPU usage, video memory and GPU temperature when the driver exposes them (NVIDIA, AMD), motherboard (vendor, model), BIOS/UEFI (vendor, version, date, boot mode, Secure Boot), graphics cards and their drivers, installed RAM (total, slots, type, speed, each module with size, speed, manufacturer and part number), device drivers (device, category, driver, version), and devices in error or without a driver."
+}

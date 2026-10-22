@@ -3,7 +3,11 @@
   "title": "Système",
   "icon": "board",
   "order": 0,
-  "refreshSeconds": 0,
-  "platforms": ["windows", "linux"],
-  "requiresAdmin": false
+  "refreshSeconds": 2,
+  "platforms": [
+    "windows",
+    "linux"
+  ],
+  "requiresAdmin": false,
+  "description": "Live overview of this computer: CPU usage, memory usage and CPU temperature (with warning/critical thresholds), operating system (name, kernel/build, architecture, host name, user, boot time, uptime, process count), CPU model, cores, threads and frequency, memory and swap details, the 15 most active processes (CPU %, memory), and temperature sensors when the OS exposes them."
 }
