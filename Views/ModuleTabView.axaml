@@ -1,0 +1,88 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:SysInfo.ViewModels"
+             x:Class="SysInfo.Views.ModuleTabView"
+             x:DataType="vm:ModuleTabViewModel">
+
+    <DockPanel>
+
+        <!-- En-tête : titre, état d'actualisation, actions -->
+        <Border DockPanel.Dock="Top"
+                Height="{StaticResource HeaderHeight}"
+                Padding="{StaticResource HeaderPadding}"
+                BorderBrush="{DynamicResource Border}"
+                BorderThickness="0,0,0,1">
+            <DockPanel>
+                <Button DockPanel.Dock="Right"
+                        Classes="Ghost Icon"
+                        Command="{Binding RefreshCommand}"
+                        ToolTip.Tip="Actualiser"
+                        AutomationProperties.Name="Actualiser"
+                        VerticalAlignment="Center">
+                    <PathIcon Data="{StaticResource Icon.arrow_clockwise}" />
+                </Button>
+                <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space12}" VerticalAlignment="Center">
+                    <TextBlock Classes="PageTitle" Text="{Binding Title}" VerticalAlignment="Center" />
+                    <TextBlock Classes="Caption" Text="{Binding StatusLine}" VerticalAlignment="Center" Margin="0,3,0,0" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Contenu : erreur éventuelle, squelette au premier chargement, puis les sections -->
+        <ScrollViewer Padding="{StaticResource PagePadding}">
+            <StackPanel Spacing="{StaticResource Space16}">
+
+                <Border Classes="Card" IsVisible="{Binding HasError}">
+                    <DockPanel>
+                        <Panel DockPanel.Dock="Left" VerticalAlignment="Top" Margin="0,2,12,0">
+                            <PathIcon Data="{StaticResource Icon.error_circle}" Foreground="{DynamicResource Danger}"
+                                      IsVisible="{Binding CanRetry}" />
+                            <PathIcon Data="{StaticResource Icon.warning}" Foreground="{DynamicResource Warning}"
+                                      IsVisible="{Binding NeedsElevation}" />
+                        </Panel>
+                        <Button DockPanel.Dock="Right" VerticalAlignment="Top"
+                                Content="Réessayer" Command="{Binding RefreshCommand}"
+                                IsVisible="{Binding CanRetry}" />
+                        <StackPanel Spacing="{StaticResource Space4}">
+                            <TextBlock Classes="CardTitle" Text="{Binding ErrorTitle}" />
+                            <SelectableTextBlock Classes="Value" Foreground="{DynamicResource TextSecondary}"
+                                                 Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <!-- Squelette : une carte de valeurs, une carte de métrique -->
+                <StackPanel Spacing="{StaticResource Space16}" IsVisible="{Binding ShowSkeleton}"
+                            AutomationProperties.Name="Chargement du module">
+                    <Border Classes="Card">
+                        <StackPanel Spacing="{StaticResource Space12}">
+                            <Border Classes="Skeleton" Width="120" Height="14" HorizontalAlignment="Left" />
+                            <Border Classes="Skeleton" Width="320" Height="12" HorizontalAlignment="Left" />
+                            <Border Classes="Skeleton" Width="260" Height="12" HorizontalAlignment="Left" />
+                            <Border Classes="Skeleton" Width="290" Height="12" HorizontalAlignment="Left" />
+                        </StackPanel>
+                    </Border>
+                    <Border Classes="Card">
+                        <StackPanel Spacing="{StaticResource Space12}">
+                            <Border Classes="Skeleton" Width="96" Height="14" HorizontalAlignment="Left" />
+                            <Border Classes="Skeleton" Width="140" Height="32" HorizontalAlignment="Left" />
+                            <Border Classes="Skeleton" Height="6" />
+                            <Border Classes="Skeleton" Height="56" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- Chaque section est rendue par sa vue (ViewLocator : …SectionViewModel → …SectionView) -->
+                <ItemsControl ItemsSource="{Binding Sections}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Spacing="{StaticResource Space16}" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+
+</UserControl>

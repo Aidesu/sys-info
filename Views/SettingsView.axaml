@@ -1,0 +1,159 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:SysInfo.ViewModels"
+             xmlns:conv="using:SysInfo.Converters"
+             x:Class="SysInfo.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+
+    <UserControl.Styles>
+        <!-- Ligne de réglage : libellé + description à gauche, contrôle à droite, filet entre les lignes -->
+        <Style Selector="Grid.SettingRow">
+            <Setter Property="MinHeight" Value="{StaticResource RowHeight}" />
+            <Setter Property="Margin" Value="0,12" />
+        </Style>
+        <Style Selector="Border.RowRule">
+            <Setter Property="Height" Value="1" />
+            <Setter Property="Background" Value="{DynamicResource Border}" />
+        </Style>
+        <!-- À propos : libellé → valeur, comme une section KeyValue -->
+        <Style Selector="Grid.AboutRow > TextBlock:nth-child(1)">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+        </Style>
+    </UserControl.Styles>
+
+    <DockPanel>
+
+        <Border DockPanel.Dock="Top"
+                Height="{StaticResource HeaderHeight}"
+                Padding="{StaticResource HeaderPadding}"
+                BorderBrush="{DynamicResource Border}"
+                BorderThickness="0,0,0,1">
+            <TextBlock Classes="PageTitle" Text="Paramètres" VerticalAlignment="Center" />
+        </Border>
+
+        <ScrollViewer Padding="{StaticResource PagePadding}">
+            <StackPanel Spacing="{StaticResource Space16}" MaxWidth="720" HorizontalAlignment="Left">
+
+                <!-- Apparence -->
+                <Border Classes="Card">
+                    <StackPanel>
+                        <TextBlock Classes="CardTitle" Text="Apparence" />
+
+                        <Grid Classes="SettingRow" ColumnDefinitions="*,Auto">
+                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Classes="Body" Text="Thème" />
+                                <TextBlock Classes="Caption" Text="Système suit le réglage clair ou sombre de l'OS." />
+                            </StackPanel>
+                            <Border Grid.Column="1" Classes="SegmentedTrack" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" AutomationProperties.Name="Thème">
+                                    <RadioButton Classes="Segment" GroupName="Theme" Content="Sombre"
+                                                 IsChecked="{Binding Theme, Converter={x:Static conv:EqualsConverter.Instance}, ConverterParameter=dark}" />
+                                    <RadioButton Classes="Segment" GroupName="Theme" Content="Clair"
+                                                 IsChecked="{Binding Theme, Converter={x:Static conv:EqualsConverter.Instance}, ConverterParameter=light}" />
+                                    <RadioButton Classes="Segment" GroupName="Theme" Content="Système"
+                                                 IsChecked="{Binding Theme, Converter={x:Static conv:EqualsConverter.Instance}, ConverterParameter=system}" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <Border Classes="RowRule" />
+
+                        <Grid Classes="SettingRow" ColumnDefinitions="*,Auto">
+                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Classes="Body" Text="Couleur d'accent" />
+                                <TextBlock Classes="Caption">
+                                    <Run Text="{Binding SelectedAccent.Name}" />
+                                    <Run Text="· boutons, onglet actif, graphiques" />
+                                </TextBlock>
+                            </StackPanel>
+                            <ListBox Grid.Column="1" Classes="Swatches" VerticalAlignment="Center"
+                                     ItemsSource="{Binding Accents}"
+                                     SelectedItem="{Binding SelectedAccent}"
+                                     AutomationProperties.Name="Couleur d'accent">
+                                <ListBox.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ListBox.ItemsPanel>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:AccentChoice">
+                                        <Ellipse Width="20" Height="20" Fill="{Binding Swatch}"
+                                                 ToolTip.Tip="{Binding Name}"
+                                                 AutomationProperties.Name="{Binding Name}" />
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- Rafraîchissement -->
+                <Border Classes="Card">
+                    <StackPanel>
+                        <TextBlock Classes="CardTitle" Text="Rafraîchissement" />
+                        <Grid Classes="SettingRow" ColumnDefinitions="*,Auto" Margin="0,12,0,0">
+                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Classes="Body" Text="Pause quand la fenêtre est réduite" />
+                                <TextBlock Classes="Caption" Text="Les modules PowerShell ne sont plus appelés." />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" VerticalAlignment="Center"
+                                          IsChecked="{Binding PauseWhenMinimized}"
+                                          AutomationProperties.Name="Pause quand la fenêtre est réduite" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- À propos -->
+                <Border Classes="Card">
+                    <StackPanel Spacing="{StaticResource Space8}">
+                        <TextBlock Classes="CardTitle" Text="À propos" Margin="0,0,0,4" />
+                        <Grid Classes="AboutRow" ColumnDefinitions="180,*">
+                            <TextBlock Classes="Body" Text="Version" />
+                            <SelectableTextBlock Grid.Column="1" Classes="Value" Text="{Binding Version}" />
+                        </Grid>
+                        <Grid Classes="AboutRow" ColumnDefinitions="180,*">
+                            <TextBlock Classes="Body" Text="Environnement" />
+                            <SelectableTextBlock Grid.Column="1" Classes="Value" Text="{Binding Runtime}" />
+                        </Grid>
+                        <Grid Classes="AboutRow" ColumnDefinitions="180,*">
+                            <TextBlock Classes="Body" Text="Modules" />
+                            <StackPanel Grid.Column="1" Spacing="2">
+                                <TextBlock Classes="Body" Text="{Binding ModuleCountText}" />
+                                <SelectableTextBlock Classes="Value" Foreground="{DynamicResource TextSecondary}"
+                                                     Text="{Binding ModulesDirectory}" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Grid>
+                        <Grid Classes="AboutRow" ColumnDefinitions="180,*" IsVisible="{Binding HasModuleErrors}">
+                            <TextBlock Classes="Body" Text="Modules ignorés" />
+                            <ItemsControl Grid.Column="1" ItemsSource="{Binding ModuleErrors}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="x:String">
+                                        <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space8}">
+                                            <PathIcon Data="{StaticResource Icon.warning}" Foreground="{DynamicResource Warning}" Width="14" Height="14" />
+                                            <SelectableTextBlock Classes="Value" Text="{Binding}" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Grid>
+                        <Grid Classes="AboutRow" ColumnDefinitions="180,*">
+                            <TextBlock Classes="Body" Text="Réglages" />
+                            <SelectableTextBlock Grid.Column="1" Classes="Value" Foreground="{DynamicResource TextSecondary}"
+                                                 Text="{Binding SettingsFile}" TextWrapping="Wrap" />
+                        </Grid>
+                        <Grid Classes="AboutRow" ColumnDefinitions="180,*">
+                            <TextBlock Classes="Body" Text="Polices" />
+                            <TextBlock Grid.Column="1" Classes="Body" Text="IBM Plex Sans et IBM Plex Mono · SIL Open Font License 1.1" TextWrapping="Wrap" />
+                        </Grid>
+                        <Grid Classes="AboutRow" ColumnDefinitions="180,*">
+                            <TextBlock Classes="Body" Text="Icônes" />
+                            <TextBlock Grid.Column="1" Classes="Body" Text="Fluent UI System Icons (Microsoft) · licence MIT" TextWrapping="Wrap" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+
+</UserControl>

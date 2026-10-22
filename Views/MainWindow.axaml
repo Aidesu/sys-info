@@ -1,0 +1,176 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:SysInfo.ViewModels"
+        xmlns:conv="using:SysInfo.Converters"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
+        x:Class="SysInfo.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="SysInfo"
+        Width="1280" Height="800"
+        MinWidth="1024" MinHeight="700"
+        Background="{DynamicResource Background}"
+        Foreground="{DynamicResource TextPrimary}">
+
+    <Design.DataContext>
+        <!-- This only sets the DataContext for the previewer in an IDE,
+             to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
+        <vm:MainWindowViewModel />
+    </Design.DataContext>
+
+    <Window.Resources>
+        <!-- Entrée de la barre : icône, libellé, état (icône dépliée, point replié) ; pas d'état OK -->
+        <DataTemplate x:Key="NavItemTemplate" x:DataType="vm:NavPageViewModel">
+            <Grid ColumnDefinitions="Auto,*,Auto" Background="Transparent"
+                  ToolTip.Tip="{Binding NavToolTip}"
+                  ToolTip.ServiceEnabled="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).IsSidebarCollapsed}">
+                <Panel>
+                    <PathIcon Classes="NavIcon" Width="20" Height="20" Data="{Binding Icon, Converter={x:Static conv:IconConverter.Instance}}" />
+                    <Panel Classes="NavDotHost" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-3,-5,0">
+                        <Ellipse Classes="NavDot" Width="6" Height="6" IsVisible="{Binding HasStatus}"
+                                 Classes.Warning="{Binding IsWarning}" Classes.Critical="{Binding IsCritical}" />
+                    </Panel>
+                </Panel>
+                <TextBlock Grid.Column="1" Classes="Body NavLabel" Text="{Binding Title}"
+                           Foreground="{Binding $parent[ContentPresenter].Foreground}"
+                           Margin="12,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <Panel Grid.Column="2" Classes="NavStatusHost" Margin="8,0,0,0" VerticalAlignment="Center"
+                       ToolTip.Tip="{Binding StatusText}">
+                    <PathIcon Width="14" Height="14" Data="{StaticResource Icon.warning}"
+                              Foreground="{DynamicResource Warning}" IsVisible="{Binding IsWarning}"
+                              AutomationProperties.Name="Attention" />
+                    <PathIcon Width="14" Height="14" Data="{StaticResource Icon.error_circle}"
+                              Foreground="{DynamicResource Danger}" IsVisible="{Binding IsCritical}"
+                              AutomationProperties.Name="Critique" />
+                </Panel>
+            </Grid>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Window.Styles>
+        <!-- Barre latérale : SidebarWidth, repliée à SidebarWidthCollapsed (icônes seules) -->
+        <Style Selector="Border.Sidebar">
+            <Setter Property="Width" Value="{StaticResource SidebarWidth}" />
+        </Style>
+        <Style Selector=".Animate Border.Sidebar">
+            <Setter Property="Transitions">
+                <Transitions>
+                    <DoubleTransition Property="Width" Duration="{StaticResource DurationBase}" />
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.Sidebar.collapsed">
+            <Setter Property="Width" Value="{StaticResource SidebarWidthCollapsed}" />
+        </Style>
+        <Style Selector="Border.Sidebar.collapsed :is(Control).Brand, Border.Sidebar.collapsed TextBlock.NavLabel, Border.Sidebar.collapsed Panel.NavStatusHost">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="Border.Sidebar:not(.collapsed) Panel.NavDotHost">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="Border.Sidebar.collapsed DockPanel.SidebarTop">
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+        <Style Selector="Border.Sidebar.collapsed Button.SidebarToggle">
+            <Setter Property="DockPanel.Dock" Value="Top" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Ellipse.NavDot.Warning">
+            <Setter Property="Fill" Value="{DynamicResource Warning}" />
+        </Style>
+        <Style Selector="Ellipse.NavDot.Critical">
+            <Setter Property="Fill" Value="{DynamicResource Danger}" />
+        </Style>
+
+        <!-- Onglets : 36 px, TextSecondary ; survol SurfaceHover ; actif AccentMuted, icône Accent -->
+        <Style Selector="ListBox.Nav">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="ItemTemplate" Value="{StaticResource NavItemTemplate}" />
+        </Style>
+        <Style Selector="ListBox.Nav ListBoxItem">
+            <Setter Property="Height" Value="36" />
+            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="Margin" Value="0,0,0,2" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+        </Style>
+        <Style Selector="ListBox.Nav ListBoxItem /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+        </Style>
+        <Style Selector="ListBox.Nav ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter, ListBox.Nav ListBoxItem:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource SurfaceHover}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+        </Style>
+        <Style Selector="ListBox.Nav ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter, ListBox.Nav ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter, ListBox.Nav ListBoxItem:selected:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AccentMuted}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+        </Style>
+        <Style Selector="ListBox.Nav ListBoxItem:selected PathIcon.NavIcon">
+            <Setter Property="Foreground" Value="{DynamicResource Accent}" />
+        </Style>
+        <Style Selector="Border.Sidebar.collapsed ListBox.Nav ListBoxItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+        </Style>
+    </Window.Styles>
+
+    <DockPanel Classes.Animate="{Binding AnimationsEnabled}">
+
+        <!-- Barre latérale -->
+        <Border DockPanel.Dock="Left"
+                Classes="Sidebar"
+                Classes.collapsed="{Binding IsSidebarCollapsed}"
+                Padding="8,12"
+                Background="{DynamicResource Background}"
+                BorderBrush="{DynamicResource Border}"
+                BorderThickness="0,0,1,0"
+                ClipToBounds="True">
+            <DockPanel>
+                <!-- Nom de l'app, machine, bouton replier / déplier -->
+                <DockPanel DockPanel.Dock="Top" Classes="SidebarTop"
+                           MinHeight="{StaticResource ControlHeight}" Margin="8,0,0,8">
+                    <Button DockPanel.Dock="Right"
+                            Classes="Ghost Icon Small SidebarToggle"
+                            Command="{Binding ToggleSidebarCommand}"
+                            ToolTip.Tip="{Binding SidebarToggleLabel}"
+                            AutomationProperties.Name="{Binding SidebarToggleLabel}">
+                        <Panel>
+                            <PathIcon Data="{StaticResource Icon.panel_left_contract}" IsVisible="{Binding !IsSidebarCollapsed}" />
+                            <PathIcon Data="{StaticResource Icon.panel_left_expand}" IsVisible="{Binding IsSidebarCollapsed}" />
+                        </Panel>
+                    </Button>
+                    <StackPanel Classes="Brand" VerticalAlignment="Center">
+                        <TextBlock Classes="CardTitle" Text="SysInfo" />
+                        <TextBlock Classes="Caption" Text="{Binding Machine}" TextTrimming="CharacterEllipsis"
+                                   ToolTip.Tip="{Binding Machine}" />
+                    </StackPanel>
+                </DockPanel>
+
+                <!-- Bas de la barre, sous un filet : Paramètres -->
+                <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource Border}" BorderThickness="0,1,0,0" Padding="0,8,0,0">
+                    <ListBox Classes="Nav"
+                             ItemsSource="{Binding FooterPages}"
+                             SelectedItem="{Binding SelectedFooterPage}"
+                             AutomationProperties.Name="Application" />
+                </Border>
+
+                <!-- Un onglet par module, dans l'ordre de module.json -->
+                <ListBox Classes="Nav"
+                         ItemsSource="{Binding Tabs}"
+                         SelectedItem="{Binding SelectedTab}"
+                         AutomationProperties.Name="Modules" />
+            </DockPanel>
+        </Border>
+
+        <!-- Page active : un module ou Paramètres (ViewLocator : …ViewModel → …View) -->
+        <ContentControl Content="{Binding CurrentPage}" />
+
+    </DockPanel>
+
+</Window>

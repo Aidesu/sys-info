@@ -1,0 +1,45 @@
+# Build .NET
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.nupkg
+*.snupkg
+
+# Sorties de publication (dotnet publish --self-contained, par OS)
+publish/
+artifacts/
+
+# Tests et couverture
+TestResults/
+coverage*/
+*.coverage
+*.trx
+
+# Visual Studio (Windows)
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# VS Code (Linux) : on garde les réglages partagés
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# JetBrains Rider
+.idea/
+*.sln.iml
+
+# Claude Code : réglages locaux uniquement (PROJECT_CONTEXT.md reste versionné)
+.claude/settings.local.json
+
+# Systèmes
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~

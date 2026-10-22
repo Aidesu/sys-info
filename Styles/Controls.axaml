@@ -1,0 +1,400 @@
+<!--
+  Contrôles Fluent aux couleurs du design system SysInfo (guides Button, TextField, Select, Switch, Slider).
+  Méthode : on remplace les ressources que le thème Fluent lit pour chaque état (survol, pressé, focus…),
+  sans réécrire les templates. Chaque pinceau suit le thème via les couleurs <Nom>Color de Tokens.axaml.
+  Bouton : secondaire par défaut ; Classes="Primary", "Ghost", "Icon" (icône seule), "Small" (compact).
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Styles.Resources>
+        <ResourceDictionary>
+
+            <!-- Couleur d'accent système de Fluent (cases à cocher, sélection de liste, barres de progression…).
+                 Fluent attend des Color : valeurs recopiées de Accent / AccentHover. -->
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Dark">
+                    <Color x:Key="SystemAccentColor">#6ea8ec</Color>        <!-- = Accent -->
+                    <Color x:Key="SystemAccentColorLight1">#8ab9f0</Color>  <!-- = AccentHover -->
+                    <Color x:Key="SystemAccentColorLight2">#6ea8ec</Color>
+                    <Color x:Key="SystemAccentColorLight3">#6ea8ec</Color>
+                    <Color x:Key="SystemAccentColorDark1">#8ab9f0</Color>
+                    <Color x:Key="SystemAccentColorDark2">#6ea8ec</Color>
+                    <Color x:Key="SystemAccentColorDark3">#6ea8ec</Color>
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Light">
+                    <Color x:Key="SystemAccentColor">#1f65bd</Color>        <!-- = Accent -->
+                    <Color x:Key="SystemAccentColorLight1">#1a569f</Color>  <!-- = AccentHover -->
+                    <Color x:Key="SystemAccentColorLight2">#1f65bd</Color>
+                    <Color x:Key="SystemAccentColorLight3">#1f65bd</Color>
+                    <Color x:Key="SystemAccentColorDark1">#1a569f</Color>
+                    <Color x:Key="SystemAccentColorDark2">#1f65bd</Color>
+                    <Color x:Key="SystemAccentColorDark3">#1f65bd</Color>
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+
+            <!-- Formes et tailles communes (= RadiusMd, Body) -->
+            <CornerRadius x:Key="ControlCornerRadius">6</CornerRadius>
+            <CornerRadius x:Key="OverlayCornerRadius">6</CornerRadius>
+            <x:Double x:Key="ControlContentThemeFontSize">13</x:Double>
+
+            <!-- Anneau de focus : contour plein 2 px Focus, décalé de 2 px -->
+            <SolidColorBrush x:Key="SystemControlFocusVisualPrimaryBrush" Color="{DynamicResource FocusColor}" />
+            <SolidColorBrush x:Key="SystemControlFocusVisualSecondaryBrush" Color="Transparent" />
+            <Thickness x:Key="SystemControlFocusVisualPrimaryThickness">2</Thickness>
+            <Thickness x:Key="SystemControlFocusVisualSecondaryThickness">0</Thickness>
+            <Thickness x:Key="SystemControlFocusVisualMargin">-4</Thickness>
+
+            <!-- Bouton secondaire (défaut) : filet BorderStrong, survol SurfaceHover -->
+            <Thickness x:Key="ButtonBorderThemeThickness">1</Thickness>
+            <SolidColorBrush x:Key="ButtonBackground" Color="Transparent" />
+            <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="{DynamicResource SurfaceHoverColor}" />
+            <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="{DynamicResource SurfaceHoverColor}" />
+            <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="Transparent" />
+            <SolidColorBrush x:Key="ButtonForeground" Color="{DynamicResource TextPrimaryColor}" />
+            <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="{DynamicResource TextPrimaryColor}" />
+            <SolidColorBrush x:Key="ButtonForegroundPressed" Color="{DynamicResource TextPrimaryColor}" />
+            <SolidColorBrush x:Key="ButtonForegroundDisabled" Color="{DynamicResource TextPrimaryColor}" />
+            <SolidColorBrush x:Key="ButtonBorderBrush" Color="{DynamicResource BorderStrongColor}" />
+            <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="{DynamicResource BorderStrongColor}" />
+            <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="{DynamicResource BorderStrongColor}" />
+            <SolidColorBrush x:Key="ButtonBorderBrushDisabled" Color="{DynamicResource BorderStrongColor}" />
+
+            <!-- Bouton bascule enfoncé : AccentMuted, texte Accent -->
+            <SolidColorBrush x:Key="ToggleButtonBackground" Color="Transparent" />
+            <SolidColorBrush x:Key="ToggleButtonBackgroundPointerOver" Color="{DynamicResource SurfaceHoverColor}" />
+            <SolidColorBrush x:Key="ToggleButtonBackgroundPressed" Color="{DynamicResource SurfaceHoverColor}" />
+            <SolidColorBrush x:Key="ToggleButtonBackgroundChecked" Color="{DynamicResource AccentMutedColor}" />
+            <SolidColorBrush x:Key="ToggleButtonBackgroundCheckedPointerOver" Color="{DynamicResource AccentMutedColor}" />
+            <SolidColorBrush x:Key="ToggleButtonBackgroundCheckedPressed" Color="{DynamicResource AccentMutedColor}" />
+            <SolidColorBrush x:Key="ToggleButtonForeground" Color="{DynamicResource TextPrimaryColor}" />
+            <SolidColorBrush x:Key="ToggleButtonForegroundPointerOver" Color="{DynamicResource TextPrimaryColor}" />
+            <SolidColorBrush x:Key="ToggleButtonForegroundPressed" Color="{DynamicResource TextPrimaryColor}" />
+            <SolidColorBrush x:Key="ToggleButtonForegroundChecked" Color="{DynamicResource AccentColor}" />
+            <SolidColorBrush x:Key="ToggleButtonForegroundCheckedPointerOver" Color="{DynamicResource AccentColor}" />
+            <SolidColorBrush x:Key="ToggleButtonForegroundCheckedPressed" Color="{DynamicResource AccentColor}" />
+            <SolidColorBrush x:Key="ToggleButtonBorderBrush" Color="{DynamicResource BorderStrongColor}" />
+            <SolidColorBrush x:Key="ToggleButtonBorderBrushPointerOver" Color="{DynamicResource BorderStrongColor}" />
+            <SolidColorBrush x:Key="ToggleButtonBorderBrushPressed" Color="{DynamicResource BorderStrongColor}" />
+            <SolidColorBrush x:Key="ToggleButtonBorderBrushChecked" Color="Transparent" />
+            <SolidColorBrush x:Key="ToggleButtonBorderBrushCheckedPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="ToggleButtonBorderBrushCheckedPressed" Color="Transparent" />
+
+            <!-- Champ texte : Surface, filet BorderStrong, Focus au focus -->
+            <SolidColorBrush x:Key="TextControlBackground" Color="{DynamicResource SurfaceColor}" />
+            <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="{DynamicResource SurfaceColor}" />
+            <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="{DynamicResource SurfaceColor}" />
+            <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="{DynamicResource SurfaceColor}" />
+            <SolidColorBrush x:Key="TextControlForeground" Color="{DynamicResource TextPrimaryColor}" />
+            <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="{DynamicResource TextPrimaryColor}" />
+            <SolidColorBrush x:Key="TextControlForegroundFocused" Color="{DynamicResource TextPrimaryColor}" />
+            <SolidColorBrush x:Key="TextControlForegroundDisabled" Color="{DynamicResource TextPrimaryColor}" />
+            <SolidColorBrush x:Key="TextControlBorderBrush" Color="{DynamicResource BorderStrongColor}" />
+            <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="{DynamicResource BorderStrongColor}" />
+            <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="{DynamicResource FocusColor}" />
+            <SolidColorBrush x:Key="TextControlBorderBrushDisabled" Color="{DynamicResource BorderStrongColor}" />
+            <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="{DynamicResource TextMutedColor}" />
+            <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="{DynamicResource TextMutedColor}" />
+            <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="{DynamicResource TextMutedColor}" />
+            <SolidColorBrush x:Key="TextControlSelectionHighlightColor" Color="{DynamicResource AccentMutedColor}" />
+            <Thickness x:Key="TextControlBorderThemeThickness">1</Thickness>
+            <Thickness x:Key="TextControlBorderThemeThicknessFocused">2</Thickness>
+
+            <!-- Liste déroulante : comme un champ ; liste ouverte sur SurfaceElevated -->
+            <SolidColorBrush x:Key="ComboBoxBackground" Color="{DynamicResource SurfaceColor}" />
+            <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="{DynamicResource SurfaceColor}" />
+            <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="{DynamicResource SurfaceColor}" />
+            <SolidColorBrush x:Key="ComboBoxBackgroundDisabled" Color="{DynamicResource SurfaceColor}" />
+            <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="{DynamicResource BorderStrongColor}" />
+            <SolidColorBrush x:Key="ComboBoxBorderBrushPointerOver" Color="{DynamicResource BorderStrongColor}" />
+            <SolidColorBrush x:Key="ComboBoxBorderBrushPressed" Color="{DynamicResource FocusColor}" />
+            <SolidColorBrush x:Key="ComboBoxBorderBrushDisabled" Color="{DynamicResource BorderStrongColor}" />
+            <SolidColorBrush x:Key="ComboBoxForeground" Color="{DynamicResource TextPrimaryColor}" />
+            <SolidColorBrush x:Key="ComboBoxForegroundDisabled" Color="{DynamicResource TextPrimaryColor}" />
+            <SolidColorBrush x:Key="ComboBoxPlaceHolderForeground" Color="{DynamicResource TextMutedColor}" />
+            <SolidColorBrush x:Key="ComboBoxDropDownGlyphForeground" Color="{DynamicResource TextMutedColor}" />
+            <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="{DynamicResource SurfaceElevatedColor}" />
+            <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="{DynamicResource BorderColor}" />
+            <SolidColorBrush x:Key="ComboBoxItemBackgroundPointerOver" Color="{DynamicResource SurfaceHoverColor}" />
+            <SolidColorBrush x:Key="ComboBoxItemBackgroundPressed" Color="{DynamicResource SurfaceHoverColor}" />
+            <SolidColorBrush x:Key="ComboBoxItemBackgroundSelected" Color="{DynamicResource AccentMutedColor}" />
+            <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedPointerOver" Color="{DynamicResource AccentMutedColor}" />
+            <SolidColorBrush x:Key="ComboBoxItemBackgroundSelectedPressed" Color="{DynamicResource AccentMutedColor}" />
+            <SolidColorBrush x:Key="ComboBoxItemForeground" Color="{DynamicResource TextPrimaryColor}" />
+            <SolidColorBrush x:Key="ComboBoxItemForegroundPointerOver" Color="{DynamicResource TextPrimaryColor}" />
+            <SolidColorBrush x:Key="ComboBoxItemForegroundSelected" Color="{DynamicResource TextPrimaryColor}" />
+
+            <!-- Interrupteur : éteint SurfaceHover + filet BorderStrong, allumé Accent + pastille OnAccent -->
+            <SolidColorBrush x:Key="ToggleSwitchFillOff" Color="{DynamicResource SurfaceHoverColor}" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOffPointerOver" Color="{DynamicResource SurfaceHoverColor}" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOffPressed" Color="{DynamicResource SurfaceHoverColor}" />
+            <SolidColorBrush x:Key="ToggleSwitchStrokeOff" Color="{DynamicResource BorderStrongColor}" />
+            <SolidColorBrush x:Key="ToggleSwitchStrokeOffPointerOver" Color="{DynamicResource BorderStrongColor}" />
+            <SolidColorBrush x:Key="ToggleSwitchStrokeOffPressed" Color="{DynamicResource BorderStrongColor}" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOff" Color="{DynamicResource TextSecondaryColor}" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOffPointerOver" Color="{DynamicResource TextSecondaryColor}" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOffPressed" Color="{DynamicResource TextSecondaryColor}" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="{DynamicResource AccentColor}" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="{DynamicResource AccentHoverColor}" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="{DynamicResource AccentHoverColor}" />
+            <SolidColorBrush x:Key="ToggleSwitchStrokeOn" Color="{DynamicResource AccentColor}" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOn" Color="{DynamicResource OnAccentColor}" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="{DynamicResource OnAccentColor}" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPressed" Color="{DynamicResource OnAccentColor}" />
+
+            <!-- Curseur : piste Border, partie remplie Accent -->
+            <SolidColorBrush x:Key="SliderTrackFill" Color="{DynamicResource BorderColor}" />
+            <SolidColorBrush x:Key="SliderTrackFillPointerOver" Color="{DynamicResource BorderColor}" />
+            <SolidColorBrush x:Key="SliderTrackFillPressed" Color="{DynamicResource BorderColor}" />
+            <SolidColorBrush x:Key="SliderTrackValueFill" Color="{DynamicResource AccentColor}" />
+            <SolidColorBrush x:Key="SliderTrackValueFillPointerOver" Color="{DynamicResource AccentColor}" />
+            <SolidColorBrush x:Key="SliderTrackValueFillPressed" Color="{DynamicResource AccentColor}" />
+            <SolidColorBrush x:Key="SliderThumbBackground" Color="{DynamicResource AccentColor}" />
+            <SolidColorBrush x:Key="SliderThumbBackgroundPointerOver" Color="{DynamicResource AccentHoverColor}" />
+            <SolidColorBrush x:Key="SliderThumbBackgroundPressed" Color="{DynamicResource AccentHoverColor}" />
+
+            <!-- Info-bulle : SurfaceElevated, filet Border -->
+            <SolidColorBrush x:Key="ToolTipBackground" Color="{DynamicResource SurfaceElevatedColor}" />
+            <SolidColorBrush x:Key="ToolTipForeground" Color="{DynamicResource TextPrimaryColor}" />
+            <SolidColorBrush x:Key="ToolTipBorderBrush" Color="{DynamicResource BorderColor}" />
+
+        </ResourceDictionary>
+    </Styles.Resources>
+
+    <!-- Bouton : hauteur ControlHeight, padding Space12, Medium 13 px, transitions DurationFast -->
+    <Style Selector="Button, ToggleButton">
+        <Setter Property="MinHeight" Value="{StaticResource ControlHeight}" />
+        <Setter Property="Padding" Value="12,0" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="FontWeight" Value="Medium" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    </Style>
+    <Style Selector="Button:disabled, ToggleButton:disabled">
+        <Setter Property="Opacity" Value="0.45" />
+    </Style>
+
+    <!-- Principal : aplat Accent, texte OnAccent ; un seul par vue -->
+    <Style Selector="Button.Primary">
+        <Setter Property="Background" Value="{DynamicResource Accent}" />
+        <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.Primary:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.Primary:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource AccentHover}" />
+        <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.Primary:disabled /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource Accent}" />
+        <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+
+    <!-- Fantôme : sans fond ni filet, TextSecondary ; actions répétées de l'en-tête -->
+    <Style Selector="Button.Ghost, ToggleButton.Ghost">
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.Ghost:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.Ghost:pressed /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.Ghost:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.Ghost:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.Ghost:disabled /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.Ghost:disabled /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+
+    <!-- Icône seule : carré ControlHeight ; ajouter ToolTip.Tip et AutomationProperties.Name -->
+    <Style Selector="Button.Icon, ToggleButton.Icon">
+        <Setter Property="Width" Value="{StaticResource ControlHeight}" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+    </Style>
+
+    <!-- Compact : ControlHeightCompact, padding Space8, 12 px -->
+    <Style Selector="Button.Small, ToggleButton.Small">
+        <Setter Property="MinHeight" Value="{StaticResource ControlHeightCompact}" />
+        <Setter Property="Padding" Value="8,0" />
+        <Setter Property="FontSize" Value="12" />
+    </Style>
+    <Style Selector="Button.Small.Icon, ToggleButton.Small.Icon">
+        <Setter Property="Width" Value="{StaticResource ControlHeightCompact}" />
+        <Setter Property="Padding" Value="0" />
+    </Style>
+
+    <!-- Champ texte et liste déroulante : hauteur ControlHeight, coins RadiusMd -->
+    <Style Selector="TextBox">
+        <Setter Property="MinHeight" Value="{StaticResource ControlHeight}" />
+        <Setter Property="Padding" Value="12,5,4,5" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    </Style>
+    <Style Selector="ComboBox">
+        <Setter Property="MinHeight" Value="{StaticResource ControlHeight}" />
+        <Setter Property="MinWidth" Value="168" />
+        <Setter Property="Padding" Value="12,0,8,0" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+    </Style>
+    <Style Selector="ComboBox /template/ Border#PopupBorder">
+        <Setter Property="Padding" Value="4" /> <!-- = Space4 -->
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+        <Setter Property="BoxShadow" Value="{DynamicResource ShadowFloat}" />
+    </Style>
+    <Style Selector="ComboBoxItem">
+        <Setter Property="MinHeight" Value="28" />
+        <Setter Property="Padding" Value="8,0" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    </Style>
+
+    <!-- Interrupteur : sans texte On/Off, le libellé est porté par la ligne de réglage -->
+    <Style Selector="ToggleSwitch">
+        <Setter Property="OnContent" Value="{x:Null}" />
+        <Setter Property="OffContent" Value="{x:Null}" />
+    </Style>
+
+    <!-- Info-bulle : coins RadiusMd -->
+    <Style Selector="ToolTip">
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+        <Setter Property="FontSize" Value="{StaticResource CaptionFontSize}" />
+    </Style>
+
+    <!-- Carte : Surface, filet Border 1 px, RadiusLg, sans ombre ; Classes="Card" (padding CardPadding) ou "Card Flush" -->
+    <Style Selector="Border.Card">
+        <Setter Property="Background" Value="{DynamicResource Surface}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Border}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+        <Setter Property="Padding" Value="{StaticResource CardPadding}" />
+    </Style>
+    <Style Selector="Border.Card.Flush">
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+
+    <!-- Badge d'état : fond *Muted, mot + icône dans la couleur d'état ; jamais la couleur seule -->
+    <Style Selector="Border.Badge">
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+        <Setter Property="Padding" Value="6,2,8,2" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.Badge PathIcon">
+        <Setter Property="Width" Value="14" />
+        <Setter Property="Height" Value="14" />
+    </Style>
+    <Style Selector="Border.Badge.Warning">
+        <Setter Property="Background" Value="{DynamicResource WarningMuted}" />
+    </Style>
+    <Style Selector="Border.Badge.Warning PathIcon">
+        <Setter Property="Foreground" Value="{DynamicResource Warning}" />
+    </Style>
+    <Style Selector="Border.Badge.Warning TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource Warning}" />
+    </Style>
+    <Style Selector="Border.Badge.Critical">
+        <Setter Property="Background" Value="{DynamicResource DangerMuted}" />
+    </Style>
+    <Style Selector="Border.Badge.Critical PathIcon">
+        <Setter Property="Foreground" Value="{DynamicResource Danger}" />
+    </Style>
+    <Style Selector="Border.Badge.Critical TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource Danger}" />
+    </Style>
+
+    <!-- Squelette de chargement : forme du contenu attendu, pulsation lente (coupée si l'OS demande moins d'animations) -->
+    <Style Selector="Border.Skeleton">
+        <Setter Property="Background" Value="{DynamicResource SurfaceHover}" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    </Style>
+    <Style Selector=":is(Control).Animate Border.Skeleton">
+        <Style.Animations>
+            <Animation Duration="0:0:1.6" IterationCount="INFINITE" PlaybackDirection="Alternate" Easing="SineEaseInOut">
+                <KeyFrame Cue="0%">
+                    <Setter Property="Opacity" Value="1" />
+                </KeyFrame>
+                <KeyFrame Cue="100%">
+                    <Setter Property="Opacity" Value="0.5" />
+                </KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+
+    <!-- Contrôle segmenté : RadioButton.Segment dans un Border.SegmentedTrack ; option active AccentMuted, texte Accent -->
+    <Style Selector="Border.SegmentedTrack">
+        <Setter Property="Background" Value="{DynamicResource SurfaceHover}" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+        <Setter Property="Padding" Value="2" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+    <Style Selector="RadioButton.Segment">
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="FontWeight" Value="Medium" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="SegmentBorder" Background="{TemplateBinding Background}"
+                        CornerRadius="{StaticResource RadiusSm}" Height="28" Padding="12,0">
+                    <ContentPresenter Content="{TemplateBinding Content}" VerticalAlignment="Center"
+                                      HorizontalAlignment="Center" Foreground="{TemplateBinding Foreground}" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="RadioButton.Segment:pointerover">
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+    </Style>
+    <Style Selector="RadioButton.Segment:checked">
+        <Setter Property="Background" Value="{DynamicResource AccentMuted}" />
+        <Setter Property="Foreground" Value="{DynamicResource Accent}" />
+    </Style>
+
+    <!-- Pastilles d'accent : ListBox.Swatches ; pastille 20 px, anneau Focus 2 px décalé de 2 px quand choisie -->
+    <Style Selector="ListBox.Swatches">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="ListBox.Swatches ListBoxItem">
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Margin" Value="0,0,4,0" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="Ring" Width="28" Height="28" CornerRadius="{StaticResource RadiusFull}"
+                        BorderThickness="2" BorderBrush="Transparent" Background="Transparent">
+                    <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="ListBox.Swatches ListBoxItem:selected /template/ Border#Ring">
+        <Setter Property="BorderBrush" Value="{DynamicResource Focus}" />
+    </Style>
+    <Style Selector="ListBox.Swatches ListBoxItem:pointerover /template/ Border#Ring">
+        <Setter Property="Background" Value="{DynamicResource SurfaceHover}" />
+    </Style>
+
+    <!-- En-tête de colonne triable : texte Label TextSecondary, survol TextPrimary, sans fond -->
+    <Style Selector="Button.ColumnHeader">
+        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="Height" Value="24" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusSm}" />
+    </Style>
+    <Style Selector="Button.ColumnHeader:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.ColumnHeader:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+    </Style>
+
+    <!-- Ligne de tableau : hauteur RowHeight, filet en haut, survol SurfaceHover -->
+    <Style Selector="Border.TableRow">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Border}" />
+        <Setter Property="BorderThickness" Value="0,1,0,0" />
+    </Style>
+    <Style Selector="Border.TableRow:pointerover">
+        <Setter Property="Background" Value="{DynamicResource SurfaceHover}" />
+    </Style>
+
+</Styles>

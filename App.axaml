@@ -1,0 +1,26 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="SysInfo.App"
+             xmlns:local="using:SysInfo"
+             RequestedThemeVariant="Dark">
+             <!-- Sombre par défaut (thème de référence du design system). "Light" ou "Default" (suit l'OS) restent possibles. -->
+
+    <Application.DataTemplates>
+        <local:ViewLocator />
+    </Application.DataTemplates>
+
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceInclude Source="avares://SysInfo/Styles/Tokens.axaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme />
+        <StyleInclude Source="avares://SysInfo/Styles/Controls.axaml" />
+        <StyleInclude Source="avares://SysInfo/Styles/Typography.axaml" />
+        <StyleInclude Source="avares://SysInfo/Styles/Icons.axaml" />
+    </Application.Styles>
+</Application>

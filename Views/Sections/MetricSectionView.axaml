@@ -1,0 +1,70 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:SysInfo.ViewModels.Sections"
+             xmlns:c="using:SysInfo.Controls"
+             x:Class="SysInfo.Views.Sections.MetricSectionView"
+             x:DataType="vm:MetricSectionViewModel">
+
+    <UserControl.Styles>
+        <!-- Sous les seuils : Accent ; au-delà, jauge et historique prennent la couleur d'état -->
+        <Style Selector="c|Meter">
+            <Setter Property="Fill" Value="{DynamicResource Accent}" />
+            <Setter Property="Track" Value="{DynamicResource Border}" />
+        </Style>
+        <Style Selector="c|Sparkline">
+            <Setter Property="Stroke" Value="{DynamicResource Accent}" />
+            <Setter Property="Fill" Value="{DynamicResource ChartArea}" />
+        </Style>
+        <Style Selector="Border.Warning c|Meter">
+            <Setter Property="Fill" Value="{DynamicResource Warning}" />
+        </Style>
+        <Style Selector="Border.Warning c|Sparkline">
+            <Setter Property="Stroke" Value="{DynamicResource Warning}" />
+            <Setter Property="Fill" Value="{DynamicResource WarningMuted}" />
+        </Style>
+        <Style Selector="Border.Critical c|Meter">
+            <Setter Property="Fill" Value="{DynamicResource Danger}" />
+        </Style>
+        <Style Selector="Border.Critical c|Sparkline">
+            <Setter Property="Stroke" Value="{DynamicResource Danger}" />
+            <Setter Property="Fill" Value="{DynamicResource DangerMuted}" />
+        </Style>
+    </UserControl.Styles>
+
+    <!-- Carte : libellé + badge d'état, grande valeur + unité, jauge, historique des 60 dernières valeurs -->
+    <Border Classes="Card" Classes.Warning="{Binding IsWarning}" Classes.Critical="{Binding IsCritical}">
+        <StackPanel Spacing="{StaticResource Space12}">
+            <DockPanel>
+                <Border DockPanel.Dock="Right" Classes="Badge"
+                        Classes.Warning="{Binding IsWarning}" Classes.Critical="{Binding IsCritical}"
+                        IsVisible="{Binding IsWarning}">
+                    <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space4}">
+                        <PathIcon Data="{StaticResource Icon.warning}" />
+                        <TextBlock Classes="Label" Text="{Binding StatusText}" />
+                    </StackPanel>
+                </Border>
+                <Border DockPanel.Dock="Right" Classes="Badge"
+                        Classes.Warning="{Binding IsWarning}" Classes.Critical="{Binding IsCritical}"
+                        IsVisible="{Binding IsCritical}">
+                    <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space4}">
+                        <PathIcon Data="{StaticResource Icon.error_circle}" />
+                        <TextBlock Classes="Label" Text="{Binding StatusText}" />
+                    </StackPanel>
+                </Border>
+                <TextBlock Classes="CardTitle" Text="{Binding Title}" VerticalAlignment="Center" />
+            </DockPanel>
+
+            <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space4}">
+                <TextBlock Classes="MetricXL" Text="{Binding ValueText}" />
+                <TextBlock Classes="Body" Foreground="{DynamicResource TextMuted}" Text="{Binding Unit}"
+                           VerticalAlignment="Bottom" Margin="0,0,0,4" />
+            </StackPanel>
+
+            <c:Meter Percent="{Binding Percent}" IsVisible="{Binding HasGauge}" Radius="4" /> <!-- = RadiusSm -->
+
+            <c:Sparkline Height="56" Values="{Binding History}" Maximum="{Binding HistoryMax}"
+                         Capacity="{x:Static vm:MetricSectionViewModel.HistoryLength}" />
+        </StackPanel>
+    </Border>
+
+</UserControl>

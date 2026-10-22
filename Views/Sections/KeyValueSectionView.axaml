@@ -1,0 +1,37 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:m="using:SysInfo.Models"
+             xmlns:vm="using:SysInfo.ViewModels.Sections"
+             x:Class="SysInfo.Views.Sections.KeyValueSectionView"
+             x:DataType="vm:KeyValueSectionViewModel">
+
+    <!-- Carte : titre, puis libellé (TextSecondary) → valeur (mono) ; libellés alignés sur la plus longue -->
+    <Border Classes="Card">
+        <StackPanel Spacing="{StaticResource Space12}">
+            <TextBlock Classes="CardTitle" Text="{Binding Title}" />
+            <ItemsControl ItemsSource="{Binding Items}" Grid.IsSharedSizeScope="True">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Spacing="{StaticResource Space8}" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="m:KeyValueItem">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="Key" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Classes="Body" Text="{Binding Key}"
+                                       Foreground="{DynamicResource TextSecondary}"
+                                       Margin="0,0,24,0" />
+                            <SelectableTextBlock Grid.Column="1" Classes="Value"
+                                                 Text="{Binding Value}" TextWrapping="Wrap" />
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </Border>
+
+</UserControl>

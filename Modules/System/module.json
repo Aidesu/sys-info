@@ -1,0 +1,9 @@
+{
+  "id": "system",
+  "title": "Système",
+  "icon": "board",
+  "order": 0,
+  "refreshSeconds": 0,
+  "platforms": ["windows", "linux"],
+  "requiresAdmin": false
+}

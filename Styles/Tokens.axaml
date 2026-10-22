@@ -1,0 +1,198 @@
+<!--
+  Tokens du design system SysInfo (https://claude.ai/artifact/KkPnuPaKG9eGADffMrAKVR).
+  Généré depuis project/tokens.json : ne pas modifier les valeurs ici sans les reporter dans le design system.
+  Couleurs : CSS #rrggbbaa → Avalonia #aarrggbb. Chaque thème définit <Nom>Color ; le pinceau <Nom> la suit.
+  Utilisation : {DynamicResource Accent} pour les pinceaux (changent avec le thème), {StaticResource Space16} pour le reste.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="using:System">
+
+    <ResourceDictionary.ThemeDictionaries>
+
+        <!-- Sombre : thème de référence -->
+        <ResourceDictionary x:Key="Dark">
+            <!-- Surfaces -->
+            <Color x:Key="BackgroundColor">#111417</Color>
+            <Color x:Key="SurfaceColor">#171a1e</Color>
+            <Color x:Key="SurfaceElevatedColor">#1f2328</Color>
+            <Color x:Key="SurfaceHoverColor">#262b31</Color>
+            <Color x:Key="BorderColor">#2a2f35</Color>
+            <Color x:Key="BorderStrongColor">#717982</Color>
+
+            <!-- Texte -->
+            <Color x:Key="TextPrimaryColor">#e6e8eb</Color>
+            <Color x:Key="TextSecondaryColor">#a8afb7</Color>
+            <Color x:Key="TextMutedColor">#8f969f</Color>
+
+            <!-- Accent -->
+            <Color x:Key="AccentColor">#6ea8ec</Color>
+            <Color x:Key="AccentHoverColor">#8ab9f0</Color>
+            <Color x:Key="AccentMutedColor">#1b2b3e</Color>
+            <Color x:Key="AccentSoftColor">#4b78ad</Color>
+            <Color x:Key="OnAccentColor">#0b1420</Color>
+
+            <!-- États -->
+            <Color x:Key="SuccessColor">#5fbf8b</Color>
+            <Color x:Key="SuccessMutedColor">#14291e</Color>
+            <Color x:Key="WarningColor">#e2a640</Color>
+            <Color x:Key="WarningMutedColor">#2e2413</Color>
+            <Color x:Key="DangerColor">#f07a70</Color>
+            <Color x:Key="DangerMutedColor">#351b1a</Color>
+
+            <!-- Graphiques et focus -->
+            <Color x:Key="ChartGridColor">#2a2f35</Color>      <!-- = Border -->
+            <Color x:Key="ChartSecondaryColor">#a8afb7</Color> <!-- = TextSecondary -->
+            <Color x:Key="ChartAreaColor">#246ea8ec</Color>
+            <Color x:Key="FocusColor">#6ea8ec</Color>          <!-- = Accent -->
+
+            <!-- Élévation -->
+            <BoxShadows x:Key="ShadowFloat">0 8 24 0 #80000000, 0 1 2 0 #4d000000</BoxShadows>
+        </ResourceDictionary>
+
+        <!-- Clair : traduction du sombre, token pour token -->
+        <ResourceDictionary x:Key="Light">
+            <!-- Surfaces -->
+            <Color x:Key="BackgroundColor">#f1f3f5</Color>
+            <Color x:Key="SurfaceColor">#ffffff</Color>
+            <Color x:Key="SurfaceElevatedColor">#ffffff</Color>
+            <Color x:Key="SurfaceHoverColor">#e8ebee</Color>
+            <Color x:Key="BorderColor">#dfe2e6</Color>
+            <Color x:Key="BorderStrongColor">#7c848d</Color>
+
+            <!-- Texte -->
+            <Color x:Key="TextPrimaryColor">#16191d</Color>
+            <Color x:Key="TextSecondaryColor">#4a525b</Color>
+            <Color x:Key="TextMutedColor">#5e666f</Color>
+
+            <!-- Accent -->
+            <Color x:Key="AccentColor">#1f65bd</Color>
+            <Color x:Key="AccentHoverColor">#1a569f</Color>
+            <Color x:Key="AccentMutedColor">#e3edf9</Color>
+            <Color x:Key="AccentSoftColor">#6590cb</Color>
+            <Color x:Key="OnAccentColor">#ffffff</Color>
+
+            <!-- États -->
+            <Color x:Key="SuccessColor">#1a7144</Color>
+            <Color x:Key="SuccessMutedColor">#e2f2e8</Color>
+            <Color x:Key="WarningColor">#895900</Color>
+            <Color x:Key="WarningMutedColor">#faeed6</Color>
+            <Color x:Key="DangerColor">#c0362e</Color>
+            <Color x:Key="DangerMutedColor">#fae5e3</Color>
+
+            <!-- Graphiques et focus -->
+            <Color x:Key="ChartGridColor">#dfe2e6</Color>      <!-- = Border -->
+            <Color x:Key="ChartSecondaryColor">#4a525b</Color> <!-- = TextSecondary -->
+            <Color x:Key="ChartAreaColor">#1a1f65bd</Color>
+            <Color x:Key="FocusColor">#1f65bd</Color>          <!-- = Accent -->
+
+            <!-- Élévation -->
+            <BoxShadows x:Key="ShadowFloat">0 8 24 0 #1f16191d, 0 1 2 0 #1416191d</BoxShadows>
+        </ResourceDictionary>
+
+    </ResourceDictionary.ThemeDictionaries>
+
+    <!-- Pinceaux : un par token, même nom, qui suit le thème via la couleur <Nom>Color ci-dessus -->
+    <SolidColorBrush x:Key="Background" Color="{DynamicResource BackgroundColor}" />
+    <SolidColorBrush x:Key="Surface" Color="{DynamicResource SurfaceColor}" />
+    <SolidColorBrush x:Key="SurfaceElevated" Color="{DynamicResource SurfaceElevatedColor}" />
+    <SolidColorBrush x:Key="SurfaceHover" Color="{DynamicResource SurfaceHoverColor}" />
+    <SolidColorBrush x:Key="Border" Color="{DynamicResource BorderColor}" />
+    <SolidColorBrush x:Key="BorderStrong" Color="{DynamicResource BorderStrongColor}" />
+    <SolidColorBrush x:Key="TextPrimary" Color="{DynamicResource TextPrimaryColor}" />
+    <SolidColorBrush x:Key="TextSecondary" Color="{DynamicResource TextSecondaryColor}" />
+    <SolidColorBrush x:Key="TextMuted" Color="{DynamicResource TextMutedColor}" />
+    <SolidColorBrush x:Key="Accent" Color="{DynamicResource AccentColor}" />
+    <SolidColorBrush x:Key="AccentHover" Color="{DynamicResource AccentHoverColor}" />
+    <SolidColorBrush x:Key="AccentMuted" Color="{DynamicResource AccentMutedColor}" />
+    <SolidColorBrush x:Key="AccentSoft" Color="{DynamicResource AccentSoftColor}" />
+    <SolidColorBrush x:Key="OnAccent" Color="{DynamicResource OnAccentColor}" />
+    <SolidColorBrush x:Key="Success" Color="{DynamicResource SuccessColor}" />
+    <SolidColorBrush x:Key="SuccessMuted" Color="{DynamicResource SuccessMutedColor}" />
+    <SolidColorBrush x:Key="Warning" Color="{DynamicResource WarningColor}" />
+    <SolidColorBrush x:Key="WarningMuted" Color="{DynamicResource WarningMutedColor}" />
+    <SolidColorBrush x:Key="Danger" Color="{DynamicResource DangerColor}" />
+    <SolidColorBrush x:Key="DangerMuted" Color="{DynamicResource DangerMutedColor}" />
+    <SolidColorBrush x:Key="ChartGrid" Color="{DynamicResource ChartGridColor}" />
+    <SolidColorBrush x:Key="ChartSecondary" Color="{DynamicResource ChartSecondaryColor}" />
+    <SolidColorBrush x:Key="ChartArea" Color="{DynamicResource ChartAreaColor}" />
+    <SolidColorBrush x:Key="Focus" Color="{DynamicResource FocusColor}" />
+
+    <!-- Polices : TTF IBM Plex embarqués dans Assets/Fonts, repli sur les polices système -->
+    <FontFamily x:Key="FontSans">avares://SysInfo/Assets/Fonts#IBM Plex Sans, Segoe UI, Ubuntu, Cantarell</FontFamily>
+    <FontFamily x:Key="FontMono">avares://SysInfo/Assets/Fonts#IBM Plex Mono, Cascadia Mono, Ubuntu Mono, Consolas, DejaVu Sans Mono</FontFamily>
+
+    <!-- Styles de texte : taille / interligne / graisse (+ interlettrage en px quand défini) -->
+    <x:Double x:Key="PageTitleFontSize">20</x:Double>
+    <x:Double x:Key="PageTitleLineHeight">28</x:Double>
+    <FontWeight x:Key="PageTitleFontWeight">SemiBold</FontWeight>
+    <x:Double x:Key="PageTitleLetterSpacing">-0.2</x:Double>
+
+    <x:Double x:Key="CardTitleFontSize">13</x:Double>
+    <x:Double x:Key="CardTitleLineHeight">20</x:Double>
+    <FontWeight x:Key="CardTitleFontWeight">SemiBold</FontWeight>
+
+    <x:Double x:Key="BodyFontSize">13</x:Double>
+    <x:Double x:Key="BodyLineHeight">20</x:Double>
+    <FontWeight x:Key="BodyFontWeight">Normal</FontWeight>
+
+    <x:Double x:Key="LabelFontSize">12</x:Double>
+    <x:Double x:Key="LabelLineHeight">16</x:Double>
+    <FontWeight x:Key="LabelFontWeight">Medium</FontWeight>
+
+    <x:Double x:Key="CaptionFontSize">12</x:Double>
+    <x:Double x:Key="CaptionLineHeight">16</x:Double>
+    <FontWeight x:Key="CaptionFontWeight">Normal</FontWeight>
+
+    <x:Double x:Key="MetricXLFontSize">32</x:Double>
+    <x:Double x:Key="MetricXLLineHeight">36</x:Double>
+    <FontWeight x:Key="MetricXLFontWeight">Medium</FontWeight>
+    <x:Double x:Key="MetricXLLetterSpacing">-0.64</x:Double>
+
+    <x:Double x:Key="MetricValueFontSize">22</x:Double>
+    <x:Double x:Key="MetricValueLineHeight">28</x:Double>
+    <FontWeight x:Key="MetricValueFontWeight">Medium</FontWeight>
+    <x:Double x:Key="MetricValueLetterSpacing">-0.22</x:Double>
+
+    <x:Double x:Key="ValueFontSize">13</x:Double>
+    <x:Double x:Key="ValueLineHeight">20</x:Double>
+    <FontWeight x:Key="ValueFontWeight">Normal</FontWeight>
+
+    <x:Double x:Key="ValueSmallFontSize">11</x:Double>
+    <x:Double x:Key="ValueSmallLineHeight">16</x:Double>
+    <FontWeight x:Key="ValueSmallFontWeight">Normal</FontWeight>
+
+    <!-- Espacements (grille de 4 px) -->
+    <x:Double x:Key="Space4">4</x:Double>
+    <x:Double x:Key="Space8">8</x:Double>
+    <x:Double x:Key="Space12">12</x:Double>
+    <x:Double x:Key="Space16">16</x:Double>
+    <x:Double x:Key="Space24">24</x:Double>
+    <x:Double x:Key="Space32">32</x:Double>
+
+    <!-- Marges dérivées (Thickness), selon les règles du README : page Space24, carte Space16 -->
+    <Thickness x:Key="PagePadding">24</Thickness>
+    <Thickness x:Key="HeaderPadding">24,0</Thickness>
+    <Thickness x:Key="CardPadding">16</Thickness>
+
+    <!-- Rayons -->
+    <CornerRadius x:Key="RadiusSm">4</CornerRadius>
+    <CornerRadius x:Key="RadiusMd">6</CornerRadius>
+    <CornerRadius x:Key="RadiusLg">10</CornerRadius>
+    <CornerRadius x:Key="RadiusFull">9999</CornerRadius>
+
+    <!-- Dimensions de structure -->
+    <x:Double x:Key="SidebarWidth">216</x:Double>
+    <x:Double x:Key="SidebarWidthCollapsed">56</x:Double>
+    <x:Double x:Key="HeaderHeight">56</x:Double>
+    <x:Double x:Key="ControlHeight">32</x:Double>
+    <x:Double x:Key="ControlHeightCompact">28</x:Double>
+    <x:Double x:Key="RowHeight">32</x:Double>
+    <x:Double x:Key="RowHeightCompact">26</x:Double>
+    <x:Double x:Key="IconSize">16</x:Double>
+
+    <!-- Durées -->
+    <sys:TimeSpan x:Key="DurationFast">0:0:0.15</sys:TimeSpan>
+    <sys:TimeSpan x:Key="DurationBase">0:0:0.2</sys:TimeSpan>
+
+</ResourceDictionary>

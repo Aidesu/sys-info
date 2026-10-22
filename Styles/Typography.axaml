@@ -1,0 +1,98 @@
+<!--
+  Styles de texte du design system SysInfo, construits sur Styles/Tokens.axaml.
+  Usage : <TextBlock Classes="PageTitle" … />, aussi valable pour SelectableTextBlock.
+  Interface en IBM Plex Sans ; toute valeur qui change en IBM Plex Mono (MetricXL, MetricValue, Value, ValueSmall).
+  La couleur posée ici est celle par défaut du README ; un Foreground local la remplace (ex. Warning pour un état).
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Interface -->
+
+    <!-- Titre de page dans l'en-tête, un seul par écran -->
+    <Style Selector=":is(TextBlock).PageTitle">
+        <Setter Property="FontFamily" Value="{StaticResource FontSans}" />
+        <Setter Property="FontSize" Value="{StaticResource PageTitleFontSize}" />
+        <Setter Property="LineHeight" Value="{StaticResource PageTitleLineHeight}" />
+        <Setter Property="FontWeight" Value="{StaticResource PageTitleFontWeight}" />
+        <Setter Property="LetterSpacing" Value="{StaticResource PageTitleLetterSpacing}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+    </Style>
+
+    <!-- Titre de carte et de groupe de réglages -->
+    <Style Selector=":is(TextBlock).CardTitle">
+        <Setter Property="FontFamily" Value="{StaticResource FontSans}" />
+        <Setter Property="FontSize" Value="{StaticResource CardTitleFontSize}" />
+        <Setter Property="LineHeight" Value="{StaticResource CardTitleLineHeight}" />
+        <Setter Property="FontWeight" Value="{StaticResource CardTitleFontWeight}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+    </Style>
+
+    <!-- Texte courant, libellés d'onglets, cellules texte -->
+    <Style Selector=":is(TextBlock).Body">
+        <Setter Property="FontFamily" Value="{StaticResource FontSans}" />
+        <Setter Property="FontSize" Value="{StaticResource BodyFontSize}" />
+        <Setter Property="LineHeight" Value="{StaticResource BodyLineHeight}" />
+        <Setter Property="FontWeight" Value="{StaticResource BodyFontWeight}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+    </Style>
+
+    <!-- En-têtes de colonnes, libellés de métriques, badges, boutons compacts -->
+    <Style Selector=":is(TextBlock).Label">
+        <Setter Property="FontFamily" Value="{StaticResource FontSans}" />
+        <Setter Property="FontSize" Value="{StaticResource LabelFontSize}" />
+        <Setter Property="LineHeight" Value="{StaticResource LabelLineHeight}" />
+        <Setter Property="FontWeight" Value="{StaticResource LabelFontWeight}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+    </Style>
+
+    <!-- Légendes, sous-titres, descriptions de réglages -->
+    <Style Selector=":is(TextBlock).Caption">
+        <Setter Property="FontFamily" Value="{StaticResource FontSans}" />
+        <Setter Property="FontSize" Value="{StaticResource CaptionFontSize}" />
+        <Setter Property="LineHeight" Value="{StaticResource CaptionLineHeight}" />
+        <Setter Property="FontWeight" Value="{StaticResource CaptionFontWeight}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
+    </Style>
+
+    <!-- Valeurs -->
+
+    <!-- Valeur principale d'une page de module -->
+    <Style Selector=":is(TextBlock).MetricXL">
+        <Setter Property="FontFamily" Value="{StaticResource FontMono}" />
+        <Setter Property="FontSize" Value="{StaticResource MetricXLFontSize}" />
+        <Setter Property="LineHeight" Value="{StaticResource MetricXLLineHeight}" />
+        <Setter Property="FontWeight" Value="{StaticResource MetricXLFontWeight}" />
+        <Setter Property="LetterSpacing" Value="{StaticResource MetricXLLetterSpacing}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+    </Style>
+
+    <!-- Valeur d'une carte de la vue d'ensemble -->
+    <Style Selector=":is(TextBlock).MetricValue">
+        <Setter Property="FontFamily" Value="{StaticResource FontMono}" />
+        <Setter Property="FontSize" Value="{StaticResource MetricValueFontSize}" />
+        <Setter Property="LineHeight" Value="{StaticResource MetricValueLineHeight}" />
+        <Setter Property="FontWeight" Value="{StaticResource MetricValueFontWeight}" />
+        <Setter Property="LetterSpacing" Value="{StaticResource MetricValueLetterSpacing}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+    </Style>
+
+    <!-- Valeurs KeyValue, cellules numériques, PID, IP -->
+    <Style Selector=":is(TextBlock).Value">
+        <Setter Property="FontFamily" Value="{StaticResource FontMono}" />
+        <Setter Property="FontSize" Value="{StaticResource ValueFontSize}" />
+        <Setter Property="LineHeight" Value="{StaticResource ValueLineHeight}" />
+        <Setter Property="FontWeight" Value="{StaticResource ValueFontWeight}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+    </Style>
+
+    <!-- Graduations d'axes, unités sous une valeur, compteurs de légende -->
+    <Style Selector=":is(TextBlock).ValueSmall">
+        <Setter Property="FontFamily" Value="{StaticResource FontMono}" />
+        <Setter Property="FontSize" Value="{StaticResource ValueSmallFontSize}" />
+        <Setter Property="LineHeight" Value="{StaticResource ValueSmallLineHeight}" />
+        <Setter Property="FontWeight" Value="{StaticResource ValueSmallFontWeight}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
+    </Style>
+
+</Styles>
