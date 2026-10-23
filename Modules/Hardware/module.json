@@ -4,7 +4,10 @@
   "icon": "developer_board",
   "order": 10,
   "refreshSeconds": 5,
-  "platforms": ["windows", "linux"],
+  "platforms": [
+    "windows",
+    "linux"
+  ],
   "requiresAdmin": false,
-  "description": "Hardware of this computer: live GPU usage, video memory and GPU temperature when the driver exposes them (NVIDIA, AMD), motherboard (vendor, model), BIOS/UEFI (vendor, version, date, boot mode, Secure Boot), graphics cards and their drivers, installed RAM (total, slots, type, speed, each module with size, speed, manufacturer and part number), device drivers (device, category, driver, version), and devices in error or without a driver."
+  "description": "Hardware of this computer: live GPU usage, video memory and GPU temperature when the driver exposes them (NVIDIA, AMD); motherboard (vendor, model, serial number when readable), BIOS/UEFI (vendor, version, date, boot mode, Secure Boot), TPM (present, version, state); graphics cards (video memory, driver, version); connected displays (name, vendor, connector, native or current resolution, size in inches, year); audio devices (outputs and inputs, default device, state); connected USB devices (name, vendor, VID:PID, speed) and connected Bluetooth devices; installed RAM (total, used and free slots, maximum capacity, type, speed, each module with size, speed, manufacturer and part number); device drivers (device, category, provider or driver, version, date or origin, signed); and devices in error or without a driver with the reason. Findings flag a hot GPU, a missing or old TPM, unsigned or very old drivers, and devices in error."
 }

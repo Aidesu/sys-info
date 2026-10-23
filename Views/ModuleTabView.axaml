@@ -2,7 +2,6 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:SysInfo.ViewModels"
              xmlns:conv="using:SysInfo.Converters"
-             xmlns:m="using:SysInfo.Models"
              x:Class="SysInfo.Views.ModuleTabView"
              x:DataType="vm:ModuleTabViewModel">
 
@@ -73,31 +72,6 @@
                                     <StackPanel Spacing="{StaticResource Space12}" />
                                 </ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="m:Finding">
-                                    <DockPanel>
-                                        <Panel DockPanel.Dock="Left" VerticalAlignment="Top" Margin="0,2,12,0">
-                                            <PathIcon Width="16" Height="16" Data="{StaticResource Icon.error_circle}"
-                                                      Foreground="{DynamicResource Danger}" IsVisible="{Binding IsCritical}"
-                                                      ToolTip.Tip="Critique" />
-                                            <PathIcon Width="16" Height="16" Data="{StaticResource Icon.warning}"
-                                                      Foreground="{DynamicResource Warning}" IsVisible="{Binding IsWarning}"
-                                                      ToolTip.Tip="Attention" />
-                                            <PathIcon Width="16" Height="16" Data="{StaticResource Icon.info}"
-                                                      Foreground="{DynamicResource TextMuted}" IsVisible="{Binding IsInfo}"
-                                                      ToolTip.Tip="Information" />
-                                        </Panel>
-                                        <TextBlock DockPanel.Dock="Right" Classes="Caption" Text="{Binding Code}"
-                                                   VerticalAlignment="Top" Margin="12,2,0,0" />
-                                        <StackPanel Spacing="{StaticResource Space4}">
-                                            <SelectableTextBlock Classes="Body" Text="{Binding Message}" TextWrapping="Wrap" />
-                                            <TextBlock Classes="Body" Foreground="{DynamicResource TextSecondary}"
-                                                       Text="{Binding Recommendation}" TextWrapping="Wrap"
-                                                       IsVisible="{Binding HasRecommendation}" />
-                                        </StackPanel>
-                                    </DockPanel>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </StackPanel>
                 </Border>
@@ -132,6 +106,23 @@
                         </ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                 </ItemsControl>
+
+                <!-- Outils : fonctions ciblées du module (module.json › functions), même source que les outils MCP -->
+                <Border Classes="Card" IsVisible="{Binding HasTools}">
+                    <StackPanel Spacing="{StaticResource Space12}">
+                        <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space8}">
+                            <PathIcon Classes="CardIcon" Data="{StaticResource Icon.search}" />
+                            <TextBlock Classes="CardTitle" Text="Outils" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <ItemsControl ItemsSource="{Binding Tools}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Spacing="{StaticResource Space8}" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
 
             </StackPanel>
         </ScrollViewer>

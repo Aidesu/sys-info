@@ -45,6 +45,9 @@ public sealed record ModuleFunction
     /// <summary>In English: what the function returns, for the MCP tool description.</summary>
     public required string Description { get; init; }
 
+    /// <summary>In French, for the window's Outils card (« Ping »). Default: the name.</summary>
+    public string? Title { get; init; }
+
     public AccessLevel Level { get; init; } = AccessLevel.L;
 
     /// <summary>Subset of the module's platforms; empty = same as the module.</summary>
@@ -71,6 +74,9 @@ public sealed record FunctionParameter
 
     /// <summary>In English, for the MCP input schema.</summary>
     public string Description { get; init; } = string.Empty;
+
+    /// <summary>In French, for the form of the window's Outils card (« Cible »). Default: the name.</summary>
+    public string? Label { get; init; }
 
     public bool Required { get; init; }
 

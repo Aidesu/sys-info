@@ -1,0 +1,66 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:SysInfo.ViewModels.Tools"
+             x:Class="SysInfo.Views.Tools.FunctionToolView"
+             x:DataType="vm:FunctionToolViewModel">
+
+    <!-- Un outil : formulaire généré depuis module.json, bouton Exécuter, puis constats et sections du résultat -->
+    <Expander Header="{Binding Title}" IsExpanded="{Binding IsExpanded}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+        <StackPanel Spacing="{StaticResource Space12}">
+
+            <ItemsControl ItemsSource="{Binding Parameters}" IsVisible="{Binding HasParameters}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel ItemSpacing="{StaticResource Space16}" LineSpacing="{StaticResource Space12}" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:FunctionParameterViewModel">
+                        <StackPanel Spacing="{StaticResource Space4}" MinWidth="160">
+                            <TextBlock Classes="Caption" Text="{Binding Label}" />
+                            <TextBox Text="{Binding Text}" IsVisible="{Binding IsText}" MinWidth="220"
+                                     AutomationProperties.Name="{Binding Label}" />
+                            <NumericUpDown Value="{Binding Number}" IsVisible="{Binding IsNumber}"
+                                           Minimum="{Binding Minimum}" Maximum="{Binding Maximum}"
+                                           Increment="{Binding Increment}" FormatString="0.##" MinWidth="140"
+                                           AutomationProperties.Name="{Binding Label}" />
+                            <CheckBox IsChecked="{Binding Flag}" IsVisible="{Binding IsFlag}"
+                                      AutomationProperties.Name="{Binding Label}" />
+                            <ComboBox ItemsSource="{Binding Options}" SelectedItem="{Binding Choice}"
+                                      IsVisible="{Binding IsChoice}" MinWidth="140"
+                                      AutomationProperties.Name="{Binding Label}" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space12}">
+                <Button Classes="Primary" Content="Exécuter" Command="{Binding RunCommand}" />
+                <TextBlock Classes="Caption" Text="{Binding Status}" IsVisible="{Binding HasStatus}"
+                           VerticalAlignment="Center" TextWrapping="Wrap" />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space8}" IsVisible="{Binding HasError}">
+                <PathIcon Width="16" Height="16" Data="{StaticResource Icon.error_circle}" Foreground="{DynamicResource Danger}" />
+                <SelectableTextBlock Classes="Body" Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
+            </StackPanel>
+
+            <ItemsControl ItemsSource="{Binding Findings}" IsVisible="{Binding HasFindings}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Spacing="{StaticResource Space8}" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+            </ItemsControl>
+
+            <ItemsControl ItemsSource="{Binding Results}" IsVisible="{Binding HasResult}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Spacing="{StaticResource Space12}" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+            </ItemsControl>
+        </StackPanel>
+    </Expander>
+
+</UserControl>

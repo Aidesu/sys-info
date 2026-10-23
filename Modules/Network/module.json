@@ -4,7 +4,197 @@
   "icon": "arrow_sort",
   "order": 20,
   "refreshSeconds": 2,
-  "platforms": ["windows", "linux"],
+  "platforms": [
+    "windows",
+    "linux"
+  ],
   "requiresAdmin": false,
-  "description": "Network of this computer: live throughput of the main interface (download / upload, Mbit/s) and latency (ms) to the Internet (1.1.1.1) and to the gateway, with packet loss; main connection (interface, Wi-Fi network and signal, IPv4/IPv6, gateway, MAC, link speed), DNS servers, DHCP lease, physical network interfaces, IPv4 routes, listening TCP/UDP ports with their process, established TCP connections, and a traceroute to 1.1.1.1 refreshed every 10 minutes."
+  "description": "Network of this computer: live throughput of the main interface (download / upload, Mbit/s) and latency (ms) to the Internet (1.1.1.1) and to the gateway, with packet loss; main connection (interface, Wi-Fi network, signal, band, channel, security, IPv4/IPv6, gateway, MAC, link speed); DNS (servers, search suffixes, a timed resolution test, local cache size on Windows); DHCP lease; physical interfaces; visible Wi-Fi networks; neighbors (ARP table: IP, MAC, interface); IPv4 routes; listening TCP/UDP ports with their process; established TCP connections; active VPNs; shared folders, mapped drives and network mounts; system proxy and custom hosts file entries; and a traceroute to 1.1.1.1 refreshed every 10 minutes. Findings flag no connection, packet loss, high latency, DNS failures, weak or insecure Wi-Fi, a slow Ethernet link, a proxy and custom hosts entries.",
+  "functions": [
+    {
+      "name": "ping",
+      "title": "Ping",
+      "command": "Get-SIPing",
+      "level": "L",
+      "description": "Pings a host (name or IP) from this computer: each reply with its time, then sent/received counts, loss and min/avg/max time. Use it to check whether a host is reachable and how fast.",
+      "parameters": [
+        {
+          "name": "target",
+          "label": "Cible",
+          "type": "string",
+          "description": "Host name or IP address to ping.",
+          "required": true
+        },
+        {
+          "name": "count",
+          "label": "Nombre",
+          "type": "integer",
+          "description": "Number of pings.",
+          "minimum": 1,
+          "maximum": 20,
+          "default": 4
+        },
+        {
+          "name": "timeoutMs",
+          "label": "Délai (ms)",
+          "type": "integer",
+          "description": "Timeout of each ping, in milliseconds.",
+          "minimum": 100,
+          "maximum": 5000,
+          "default": 1000
+        }
+      ]
+    },
+    {
+      "name": "traceroute",
+      "title": "Traceroute",
+      "command": "Get-SITraceroute",
+      "level": "L",
+      "dependencies": [
+        "traceroute",
+        "tracepath"
+      ],
+      "description": "Traceroute from this computer to a host: each hop with its address and latency. Use it to see where a connection slows down or stops. Takes up to a few seconds per hop.",
+      "parameters": [
+        {
+          "name": "target",
+          "label": "Cible",
+          "type": "string",
+          "description": "Host name or IP address.",
+          "required": true
+        },
+        {
+          "name": "maxHops",
+          "label": "Sauts max.",
+          "type": "integer",
+          "description": "Maximum number of hops.",
+          "minimum": 1,
+          "maximum": 30,
+          "default": 20
+        }
+      ]
+    },
+    {
+      "name": "test_port",
+      "title": "Test de port TCP",
+      "command": "Test-SIPort",
+      "level": "L",
+      "description": "Tests a TCP connection from this computer to host:port and reports whether the port is open, closed (refused) or filtered (no answer), with the connection time. Use it when ping is blocked or to check a service (web, SSH, RDP, SMB…).",
+      "parameters": [
+        {
+          "name": "target",
+          "label": "Cible",
+          "type": "string",
+          "description": "Host name or IP address.",
+          "required": true
+        },
+        {
+          "name": "port",
+          "label": "Port",
+          "type": "integer",
+          "description": "TCP port.",
+          "required": true,
+          "minimum": 1,
+          "maximum": 65535
+        },
+        {
+          "name": "timeoutMs",
+          "label": "Délai (ms)",
+          "type": "integer",
+          "description": "Connection timeout, in milliseconds.",
+          "minimum": 100,
+          "maximum": 10000,
+          "default": 3000
+        }
+      ]
+    },
+    {
+      "name": "test_mtu",
+      "title": "MTU du chemin",
+      "command": "Get-SIPathMtu",
+      "level": "L",
+      "description": "Measures the path MTU from this computer to a host: the largest packet that passes without fragmentation (1500 on a normal Ethernet path, less behind PPPoE or a VPN).",
+      "parameters": [
+        {
+          "name": "target",
+          "label": "Cible",
+          "type": "string",
+          "description": "Host name or IP address.",
+          "default": "1.1.1.1"
+        }
+      ]
+    },
+    {
+      "name": "get_public_ip",
+      "title": "Adresse IP publique",
+      "command": "Get-SIPublicIp",
+      "level": "L",
+      "description": "Public IPv4 and IPv6 addresses of this computer as seen from the Internet, with their reverse DNS name. Calls the external service api.ipify.org.",
+      "parameters": []
+    },
+    {
+      "name": "discover_lan",
+      "title": "Découverte du réseau local",
+      "command": "Get-SILanDevices",
+      "level": "L",
+      "dependencies": [
+        "avahi-browse"
+      ],
+      "description": "Discovers devices on the local network: pings every address of the main subnet (up to a /24), then lists each device with IP, DNS or mDNS name, MAC address, role (this computer, gateway), mDNS services (printer, Chromecast, SMB share, Home Assistant…) and ping time. Takes 2 to 5 seconds.",
+      "parameters": [
+        {
+          "name": "timeoutMs",
+          "label": "Délai du ping (ms)",
+          "type": "integer",
+          "description": "Timeout of each ping, in milliseconds.",
+          "minimum": 100,
+          "maximum": 3000,
+          "default": 600
+        }
+      ]
+    },
+    {
+      "name": "resolve_dns",
+      "title": "Requête DNS",
+      "command": "Resolve-SIDns",
+      "level": "L",
+      "dependencies": [
+        "dig"
+      ],
+      "description": "DNS query from this computer: records of a given type (A, AAAA, CNAME, MX, NS, TXT, SOA, PTR, SRV) for a name, optionally against a specific DNS server, with TTL and response time.",
+      "parameters": [
+        {
+          "name": "name",
+          "label": "Nom",
+          "type": "string",
+          "description": "Name to resolve (or IP address for PTR).",
+          "required": true
+        },
+        {
+          "name": "recordType",
+          "label": "Type",
+          "type": "string",
+          "description": "Record type.",
+          "enum": [
+            "A",
+            "AAAA",
+            "CNAME",
+            "MX",
+            "NS",
+            "TXT",
+            "SOA",
+            "PTR",
+            "SRV"
+          ],
+          "default": "A"
+        },
+        {
+          "name": "server",
+          "label": "Serveur DNS",
+          "type": "string",
+          "description": "DNS server to ask (IP or name); omit for the system resolver."
+        }
+      ]
+    }
+  ]
 }

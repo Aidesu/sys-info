@@ -191,6 +191,7 @@ Findings = @(
 "functions": [
   {
     "name": "get_processes",
+    "title": "Liste des processus",
     "command": "Get-SIProcesses",
     "level": "L",
     "description": "Running processes of this computer, sorted and filtered: …",
@@ -198,7 +199,7 @@ Findings = @(
     "requiresAdmin": false,
     "dependencies": [],
     "parameters": [
-      { "name": "top", "type": "integer", "description": "Number of processes returned.", "minimum": 1, "maximum": 500, "default": 20 },
+      { "name": "top", "label": "Nombre", "type": "integer", "description": "Number of processes returned.", "minimum": 1, "maximum": 500, "default": 20 },
       { "name": "sortBy", "type": "string", "enum": ["cpu", "memory", "name"], "default": "cpu", "description": "…" },
       { "name": "filter", "type": "string", "description": "…" }
     ]
@@ -209,13 +210,16 @@ Findings = @(
 | Champ | Rôle |
 |---|---|
 | `name` | snake_case ; outil MCP `<id>_<name>` (ex. `system_get_processes`) |
+| `title` | facultatif, **en français** : nom de l'outil dans la carte « Outils » de la fenêtre (à défaut, `name`) |
 | `command` | fonction PowerShell du `.psm1`, nommée `<Verbe>-SI<Nom>` (ex. `Get-SIProcesses`), exportée |
 | `level` | `L` lecture · `A` action réversible · `C` action critique · `X` jamais en MCP. **Seul `L` est exposé pour l'instant** (A/C : sprint S4, avec confirmation dans l'UI et audit) |
 | `description` | en anglais, obligatoire : ce que renvoie la fonction et quand l'utiliser |
 | `platforms` | facultatif, sous-ensemble de ceux du module ; vide = ceux du module |
 | `requiresAdmin` | facultatif ; refus explicite (erreur MCP) si l'app n'est pas élevée |
 | `dependencies` | facultatif : outils externes utilisés s'ils sont présents (`smartctl`, `nvidia-smi`…). Absent → la fonction marche quand même et renvoie un constat `info` « installer X pour activer » |
-| `parameters` | `name` (camelCase = paramètre PowerShell), `type` (`string`, `integer`, `number`, `boolean`), `description`, `required`, `enum` (string), `minimum` / `maximum`, `default` (documentaire : la fonction PowerShell applique sa propre valeur par défaut) |
+| `parameters` | `name` (camelCase = paramètre PowerShell), `label` (en français, libellé du formulaire), `type` (`string`, `integer`, `number`, `boolean`), `description`, `required`, `enum` (string), `minimum` / `maximum`, `default` (documentaire : la fonction PowerShell applique sa propre valeur par défaut) |
+
+Affichage : chaque fonction `L` apparaît dans la carte **« Outils »** en bas de la page du module : formulaire généré depuis `parameters` (texte, nombre, case à cocher, liste), bouton « Exécuter », puis constats et sections du résultat avec les rendus habituels. Les outils tournent dans un runspace à part : une analyse longue ne bloque pas le rafraîchissement de la page.
 
 Règles :
 

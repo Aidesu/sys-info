@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.Input;
 using SysInfo.Models;
 using SysInfo.Services;
 using SysInfo.ViewModels.Sections;
+using SysInfo.ViewModels.Tools;
 
 namespace SysInfo.ViewModels;
 
@@ -20,6 +21,9 @@ public partial class ModuleTabViewModel : NavPageViewModel, IDisposable
     private readonly LoadedModule _module;
     private readonly DispatcherTimer? _timer;
     private PowerShellService? _powerShell;
+    // The Outils card runs in its own runspace: a 30 s analysis must not stall the page's refresh.
+    private PowerShellService? _toolsPowerShell;
+    private readonly System.Threading.SemaphoreSlim _toolsInit = new(1, 1);
     private bool _started;
 
     public ModuleTabViewModel(LoadedModule module)
@@ -31,6 +35,34 @@ public partial class ModuleTabViewModel : NavPageViewModel, IDisposable
             _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(module.Manifest.RefreshSeconds) };
             _timer.Tick += (_, _) => { if (!IsBusy) RefreshCommand.Execute(null); };
         }
+
+        // Read-only functions only; actions (levels A and C) wait for the confirmation framework (sprint S4).
+        Tools = module.Functions
+            .Where(f => f.Level == AccessLevel.L)
+            .Select(f => new FunctionToolViewModel(f, InvokeToolAsync))
+            .ToList();
+    }
+
+    /// <summary>Targeted functions of the module (module.json › functions), shown in the Outils card.</summary>
+    public IReadOnlyList<FunctionToolViewModel> Tools { get; }
+
+    public bool HasTools => Tools.Count > 0;
+
+    private async Task<System.Management.Automation.PSObject> InvokeToolAsync(string command, IReadOnlyDictionary<string, object?> arguments)
+    {
+        if ((_module.Manifest.RequiresAdmin || _module.Functions.Any(f => f.Command == command && f.RequiresAdmin)) && !Environment.IsPrivilegedProcess)
+            throw new InvalidOperationException("Relancez SysInfo en administrateur (root sous Linux) pour utiliser cet outil.");
+
+        await _toolsInit.WaitAsync();
+        try
+        {
+            _toolsPowerShell ??= await Task.Run(() => new PowerShellService(_module.ScriptPath));
+        }
+        finally
+        {
+            _toolsInit.Release();
+        }
+        return await _toolsPowerShell.InvokeAsync(command, arguments);
     }
 
     public string Id => _module.Manifest.Id;
@@ -225,5 +257,7 @@ public partial class ModuleTabViewModel : NavPageViewModel, IDisposable
     {
         _timer?.Stop();
         _powerShell?.Dispose();
+        _toolsPowerShell?.Dispose();
+        _toolsInit.Dispose();
     }
 }

@@ -9,16 +9,18 @@
     "linux"
   ],
   "requiresAdmin": false,
-  "description": "Live overview of this computer: CPU usage, memory usage and CPU temperature (with warning/critical thresholds), operating system (name, kernel/build, architecture, host name, user, boot time, uptime, process count), CPU model, cores, threads and frequency, memory and swap details, the 15 most active processes (CPU %, memory), and temperature sensors when the OS exposes them.",
+  "description": "Live overview of this computer: CPU usage (total and per thread), memory usage and CPU temperature (with warning/critical thresholds); operating system (name, version, kernel/build, architecture, install date, boot time, uptime, how the previous session ended: clean or unexpected shutdown, process count); machine (name, user, manufacturer, model, domain or workgroup, physical or virtual machine); CPU model, cores, threads, frequencies and caches; memory, cache, committed memory and swap/page file; the 15 most active processes; date, time zone and NTP synchronization; system language, regional formats and keyboard; temperature sensors when the OS exposes them. Findings flag high memory or swap use, a hot CPU, an unexpected shutdown and an unsynchronized clock.",
   "functions": [
     {
       "name": "get_processes",
+      "title": "Liste des processus",
       "command": "Get-SIProcesses",
       "level": "L",
-      "description": "Running processes of this computer, sorted and filtered: name, PID, parent PID, CPU %, memory (MiB), user, start time, executable path and command line (obvious secrets such as --password=… are masked). Use it to find what slows the computer down or to check a process; the overview get_system only lists the 15 most active.",
+      "description": "Running processes of this computer, sorted and filtered: name, PID, parent PID, CPU %, memory (MiB), disk read/written since start (MiB), user, start time, executable path, signature (Windows) and command line (obvious secrets such as --password=… are masked). Use it to find what slows the computer down or to check a process; the overview get_system only lists the 15 most active.",
       "parameters": [
         {
           "name": "top",
+          "label": "Nombre",
           "type": "integer",
           "description": "Number of processes returned.",
           "minimum": 1,
@@ -27,19 +29,56 @@
         },
         {
           "name": "sortBy",
+          "label": "Tri",
           "type": "string",
-          "description": "Sort order: cpu (most active first), memory (largest first) or name.",
+          "description": "Sort order: cpu (most active first), memory (largest first), io (most disk read + written since start) or name.",
           "enum": [
             "cpu",
             "memory",
+            "io",
             "name"
           ],
           "default": "cpu"
         },
         {
           "name": "filter",
+          "label": "Filtre (nom)",
           "type": "string",
           "description": "Keep only processes whose name contains this text (case-insensitive)."
+        }
+      ]
+    },
+    {
+      "name": "get_process_tree",
+      "title": "Arbre des processus",
+      "command": "Get-SIProcessTree",
+      "level": "L",
+      "description": "Process tree of this computer (parent → children, indented names): PID, parent PID, number of children, CPU % and memory (MiB). Whole tree from the root processes, or the subtree of one process. Use it to see what launched a process or what a process launched.",
+      "parameters": [
+        {
+          "name": "processId",
+          "label": "PID racine",
+          "type": "integer",
+          "description": "PID of the process whose subtree is returned; omit for the whole tree.",
+          "minimum": 1
+        },
+        {
+          "name": "maxDepth",
+          "label": "Profondeur max.",
+          "type": "integer",
+          "description": "Maximum depth of the tree.",
+          "minimum": 1,
+          "maximum": 30,
+          "default": 10
+        },
+        {
+          "name": "top",
+          "label": "Lignes max.",
+          "type": "integer",
+          "description": "Maximum number of rows returned.",
+          "minimum": 1,
+          "maximum": 2000,
+          "default": 300
         }
       ]
     }

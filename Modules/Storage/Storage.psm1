@@ -1,12 +1,16 @@
-# Module Stockage : disques, partitions, SMART, volumes, espace disponible, erreurs.
+# Module Stockage : disques, partitions, SMART, volumes, inodes, pools / RAID, TRIM, espace disponible, erreurs,
+# analyse d'espace et espace récupérable.
 #
 # Sources
 #   Windows : Get-Volume, Get-PhysicalDisk, Get-Disk, Get-Partition, Get-StorageReliabilityCounter (SMART, souvent
-#             réservé aux administrateurs), Win32_PerfFormattedData_PerfDisk_PhysicalDisk (activité),
+#             réservé aux administrateurs), Get-StoragePool, Get-VirtualDisk, fsutil (TRIM, volume « dirty » en admin),
+#             tâche planifiée ScheduledDefrag, Win32_PerfFormattedData_PerfDisk_PhysicalDisk (activité),
 #             journal Système (disk, Ntfs, volmgr, stornvme, storahci).
-#   Linux   : lsblk et findmnt (JSON), /proc/diskstats (activité), udisks par D-Bus via busctl (SMART sans droits
-#             root : NVMe.Controller.SmartGetAttributes, Drive.Ata), /sys/fs/btrfs et /sys/fs/ext4 (compteurs
-#             d'erreurs), journalctl -k (erreurs du noyau).
+#   Linux   : lsblk et findmnt (JSON), df (inodes), /proc/diskstats (activité), udisks par D-Bus via busctl (SMART sans
+#             droits root : NVMe.Controller.SmartGetAttributes, Drive.Ata), /proc/mdstat, /sys/fs/btrfs (profils,
+#             compteurs d'erreurs), /sys/fs/ext4, zpool, systemctl (fstrim.timer), /sys/block/*/queue/discard_max_bytes,
+#             tune2fs en root (état ext4), journalctl -k (erreurs du noyau), du / docker / journalctl (espace récupérable).
+#   Commun  : analyse d'espace par une classe C# compilée au premier appel (Add-Type), même code sur les deux OS.
 #
 # État gardé entre deux appels ($script:) : compteurs d'octets lus/écrits (activité), SMART relu toutes les 30 s,
 # erreurs du journal relues toutes les 60 s.
@@ -19,6 +23,17 @@ $script:Events = $null; $script:EventsAt = $null
 
 # Seuils de remplissage (design system) : Attention ≥ 85 %, Critique ≥ 95 %.
 $script:FillWarning = 0.85; $script:FillCritical = 0.95
+
+# Cache des données qui changent peu : recalculées au plus toutes les $Seconds secondes.
+# Un échec n'est pas mis en cache (l'exception remonte à Invoke-Block).
+$script:Cache = @{}
+function Get-Cached([string]$Key, [int]$Seconds, [scriptblock]$Compute) {
+    $entry = $script:Cache[$Key]
+    if ($entry -and ((Get-Date) - $entry.At).TotalSeconds -lt $Seconds) { return $entry.Value }
+    $value = & $Compute
+    $script:Cache[$Key] = @{ At = Get-Date; Value = $value }
+    $value
+}
 
 #region Outils
 
@@ -86,15 +101,18 @@ function Get-Volumes {
 
 function Get-Disks {
     if ($IsWindows) {
+        $styles = @{}
+        foreach ($d in Get-Disk -ErrorAction SilentlyContinue) { $styles["$($d.Number)"] = "$($d.PartitionStyle)" }
         return Get-PhysicalDisk -ErrorAction SilentlyContinue | Sort-Object DeviceId | ForEach-Object {
             [PSCustomObject]@{
                 Name = "Disque $($_.DeviceId)"; Device = $_; Model = $_.FriendlyName; Serial = "$($_.SerialNumber)".Trim()
                 Kind = '{0} {1}' -f $_.MediaType, $_.BusType; Size = [double]$_.Size; Removable = $_.BusType -eq 'USB'
-                Health = "$($_.HealthStatus)"
+                Health = "$($_.HealthStatus)"; Table = $styles["$($_.DeviceId)"] -replace '^RAW$', 'aucune'
+                Ssd = "$($_.MediaType)" -eq 'SSD'
             }
         }
     }
-    $json = (Invoke-Tool lsblk @('-J', '-b', '-d', '-e', '7,251', '-o', 'NAME,TYPE,SIZE,MODEL,SERIAL,TRAN,ROTA,RM,VENDOR')) -join ''
+    $json = (Invoke-Tool lsblk @('-J', '-b', '-d', '-e', '7,251', '-o', 'NAME,TYPE,SIZE,MODEL,SERIAL,TRAN,ROTA,RM,VENDOR,PTTYPE')) -join ''
     if (-not $json) { return @() }
     ($json | ConvertFrom-Json).blockdevices | Where-Object type -eq 'disk' | ForEach-Object {
         $kind = switch ($_.tran) {
@@ -106,6 +124,8 @@ function Get-Disks {
             Name = $_.name; Device = "/dev/$($_.name)"
             Model = (('{0} {1}' -f $_.vendor, $_.model).Trim() -replace '\s+', ' ')
             Serial = $_.serial; Kind = $kind; Size = [double]$_.size; Removable = [bool]$_.rm; Health = $null
+            Table = if ($_.pttype -eq 'dos') { 'MBR' } elseif ($_.pttype) { $_.pttype.ToUpperInvariant() } else { 'aucune' }
+            Ssd = -not $_.rota
         }
     }
 }
@@ -118,6 +138,7 @@ function Get-Partitions {
                 Name = 'Disque {0} · partition {1}' -f $_.DiskNumber, $_.PartitionNumber; Disk = "Disque $($_.DiskNumber)"
                 Size = [double]$_.Size; FsType = $volume.FileSystem; Label = $volume.FileSystemLabel
                 Mount = if ($_.DriveLetter) { "$($_.DriveLetter):" } else { $null }; Role = "$($_.Type)"
+                Aligned = ([double]$_.Offset % 1MB) -eq 0
             }
         }
     }
@@ -125,10 +146,120 @@ function Get-Partitions {
     if (-not $json) { return @() }
     foreach ($disk in ($json | ConvertFrom-Json).blockdevices) {
         foreach ($part in @($disk.children | Where-Object type -eq 'part')) {
+            # Début de la partition en secteurs de 512 octets (/sys/class/block/<part>/start) : aligné sur 1 MiB ?
+            $start = Get-Content -LiteralPath "/sys/class/block/$($part.name)/start" -ErrorAction SilentlyContinue
             [PSCustomObject]@{
                 Name = $part.name; Disk = $disk.name; Size = [double]$part.size; FsType = $part.fstype; Label = $part.label
                 Mount = (@($part.mountpoints | Where-Object { $_ }) -join ', '); Role = $part.parttypename
+                Aligned = if ($start) { ([double]$start * 512 % 1MB) -eq 0 } else { $null }
             }
+        }
+    }
+}
+
+# Inodes par système de fichiers (Linux ; btrfs et vfat n'ont pas de nombre fixe d'inodes → ignorés).
+function Get-Inodes {
+    if (-not $IsLinux) { return @() }
+    Invoke-Tool df @('--output=target,fstype,itotal,iused', '-x', 'tmpfs', '-x', 'devtmpfs', '-x', 'squashfs', '-x', 'overlay', '-x', 'efivarfs') |
+        Select-Object -Skip 1 | ForEach-Object {
+            $f = $_.Trim() -split '\s+'
+            if ($f.Count -ge 4 -and [double]$f[2] -gt 0) { [PSCustomObject]@{ Mount = $f[0]; FsType = $f[1]; Total = [double]$f[2]; Used = [double]$f[3] } }
+        }
+}
+
+# Pools et RAID.
+# Windows : Get-StoragePool (hors pool primordial) et ses disques virtuels (résilience, état).
+# Linux   : /proc/mdstat (RAID logiciel), btrfs multi-périphériques (/sys/fs/btrfs/<uuid>/devices, profil des données),
+#           volumes LVM (lsblk TYPE=lvm), zpool list.
+function Get-Pools {
+    if ($IsWindows) {
+        return Get-StoragePool -IsPrimordial $false -ErrorAction SilentlyContinue | ForEach-Object {
+            $virtual = @($_ | Get-VirtualDisk -ErrorAction SilentlyContinue)
+            [PSCustomObject]@{
+                Name = $_.FriendlyName; Kind = 'Espaces de stockage · ' + (($virtual.ResiliencySettingName | Select-Object -Unique) -join ', ')
+                Size = [double]$_.Size; State = "$($_.HealthStatus)"; Members = @($_ | Get-PhysicalDisk -ErrorAction SilentlyContinue).Count
+                Degraded = "$($_.HealthStatus)" -ne 'Healthy' -or ($virtual | Where-Object { "$($_.HealthStatus)" -ne 'Healthy' })
+            }
+        }
+    }
+
+    $list = [System.Collections.Generic.List[object]]::new()
+    # mdstat : « md0 : active raid1 sdb1[1] sda1[0] » puis « … blocks [2/2] [UU] » (un « _ » = membre absent).
+    $lines = @(Get-Content -Path /proc/mdstat -ErrorAction SilentlyContinue)
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -match '^(md\d+)\s*:\s*(\S+)\s+(\S+)\s+(.*)$') {
+            $name = $Matches[1]; $state = $Matches[2]; $level = $Matches[3]; $members = @($Matches[4] -split '\s+').Count
+            $status = if ($i + 1 -lt $lines.Count -and $lines[$i + 1] -match '\[([U_]+)\]') { $Matches[1] } else { '' }
+            $size = [double](Get-Content "/sys/block/$name/size" -ErrorAction SilentlyContinue) * 512
+            $list.Add([PSCustomObject]@{
+                    Name = "/dev/$name"; Kind = "RAID logiciel $level"; Size = $size; Members = $members
+                    State = if ($status -match '_') { "Dégradé ($status)" } elseif ($state -eq 'active') { 'Actif' } else { $state }
+                    Degraded = $status -match '_'
+                })
+        }
+    }
+    foreach ($fs in Get-ChildItem -Path /sys/fs/btrfs -Directory -ErrorAction SilentlyContinue | Where-Object Name -Match '^[0-9a-f-]{36}$') {
+        $devices = @(Get-ChildItem -Path (Join-Path $fs.FullName 'devices') -ErrorAction SilentlyContinue)
+        if ($devices.Count -lt 2) { continue }
+        $dataProfile = (Get-ChildItem -Path (Join-Path $fs.FullName 'allocation/data') -Directory -ErrorAction SilentlyContinue | Select-Object -First 1).Name
+        $label = Get-Content (Join-Path $fs.FullName 'label') -ErrorAction SilentlyContinue
+        $total = [double](Get-Content (Join-Path $fs.FullName 'allocation/data/total_bytes') -ErrorAction SilentlyContinue)
+        $list.Add([PSCustomObject]@{ Name = "btrfs $(if ($label) { $label } else { $fs.Name.Substring(0, 8) })"; Kind = "Btrfs $dataProfile"; Size = $total; Members = $devices.Count; State = 'Monté'; Degraded = $false })
+    }
+    $json = (Invoke-Tool lsblk @('-J', '-b', '-o', 'NAME,TYPE,SIZE')) -join ''
+    if ($json) {
+        $walk = { param($nodes) foreach ($n in $nodes) { if ($n.type -eq 'lvm') { $n }; if ($n.children) { & $walk $n.children } } }
+        foreach ($lv in & $walk ($json | ConvertFrom-Json).blockdevices | Sort-Object name -Unique) {
+            $list.Add([PSCustomObject]@{ Name = $lv.name; Kind = 'Volume logique LVM'; Size = [double]$lv.size; Members = $null; State = 'Actif'; Degraded = $false })
+        }
+    }
+    foreach ($line in Invoke-Tool zpool @('list', '-H', '-p', '-o', 'name,size,health')) {
+        $f = $line -split '\t'
+        $list.Add([PSCustomObject]@{ Name = $f[0]; Kind = 'Pool ZFS'; Size = [double]$f[1]; Members = $null; State = $f[2]; Degraded = $f[2] -ne 'ONLINE' })
+    }
+    $list
+}
+
+# TRIM : le système signale-t-il les blocs libérés aux SSD ?
+# Windows : fsutil behavior query DisableDeleteNotify (0 = activé) et tâche planifiée d'optimisation.
+# Linux   : option de montage discard, ou fstrim.timer activé ; support matériel via discard_max_bytes.
+function Get-TrimInfo($Disks) {
+    if ($IsWindows) {
+        $line = Invoke-Tool fsutil @('behavior', 'query', 'DisableDeleteNotify') | Where-Object { $_ -match 'NTFS' } | Select-Object -First 1
+        $enabled = if ($line -match '=\s*(\d)') { $Matches[1] -eq '0' } else { $null }
+        $task = Get-ScheduledTask -TaskPath '\Microsoft\Windows\Defrag\' -TaskName 'ScheduledDefrag' -ErrorAction SilentlyContinue
+        return [PSCustomObject]@{
+            Enabled = $enabled
+            Mode = if ($enabled -eq $false) { 'Désactivé (DisableDeleteNotify = 1)' } elseif ($task -and $task.State -ne 'Disabled') { 'Activé · optimisation planifiée' } elseif ($enabled) { 'Activé · optimisation planifiée désactivée' } else { 'Inconnu' }
+        }
+    }
+    $supported = @($Disks | Where-Object { [double](Get-Content "/sys/block/$($_.Name)/queue/discard_max_bytes" -ErrorAction SilentlyContinue) -gt 0 })
+    $discard = @((Invoke-Tool findmnt @('-n', '-l', '-o', 'TARGET,OPTIONS', '--real')) | Where-Object { $_ -match '(^|,|\s)discard' } | ForEach-Object { ($_ -split '\s+')[0] })
+    $timer = (Invoke-Tool systemctl @('is-enabled', 'fstrim.timer')) -eq 'enabled'
+    $modes = @()
+    if ($discard.Count -gt 0) { $modes += 'en continu (option discard : {0})' -f ($discard -join ', ') }
+    if ($timer) { $modes += 'planifié (fstrim.timer)' }
+    [PSCustomObject]@{
+        Enabled = $modes.Count -gt 0
+        Mode = if ($modes) { 'Activé · ' + ($modes -join ' · ') } else { 'Désactivé' }
+        Supported = $supported.Count
+    }
+}
+
+# Volumes marqués « à vérifier » (dirty) : seulement avec les droits administrateur / root.
+# Windows : fsutil dirty query X:. Linux : tune2fs -l (ext2/3/4 : « Filesystem state »).
+function Get-DirtyVolumes($Volumes) {
+    if (-not [Environment]::IsPrivilegedProcess) { return $null }
+    foreach ($v in $Volumes) {
+        if ($IsWindows) {
+            if ($v.Mount -notmatch '^[A-Z]:$') { continue }
+            $out = Invoke-Tool fsutil @('dirty', 'query', $v.Mount)
+            # « Le volume C: n'est PAS incorrect » / « Volume - C: is NOT Dirty » : la négation en majuscules.
+            [PSCustomObject]@{ Mount = $v.Mount; Dirty = -not ($out -cmatch 'NOT|PAS') }
+        }
+        elseif ($v.FsType -like 'ext*') {
+            $state = Invoke-Tool tune2fs @('-l', $v.Source) | Where-Object { $_ -like 'Filesystem state:*' } | Select-Object -First 1
+            if ($state) { [PSCustomObject]@{ Mount = $v.Mount; Dirty = $state -notmatch 'clean' } }
         }
     }
 }
@@ -337,13 +468,13 @@ function Get-ModuleData {
     if ($disks.Count -gt 0) {
         $rows = foreach ($d in $disks) {
             $s = $script:Smart[$d.Name]
-            , @($d.Name, $d.Model, $d.Kind, (Format-Capacity $d.Size), (Get-SmartState $s),
+            , @($d.Name, $d.Model, $d.Kind, (Format-Capacity $d.Size), $d.Table, (Get-SmartState $s),
                 $(if ($s -and $null -ne $s.Temperature) { [Math]::Round($s.Temperature) } else { $null }),
-                $(if ($s) { $s.Wear } else { $null }), $(if ($s) { $s.Hours } else { $null }))
+                $(if ($s) { $s.Wear } else { $null }), $(if ($s) { $s.Hours } else { $null }), $d.Serial)
         }
         $sections.Add([PSCustomObject]@{
                 Title = 'Disques physiques'; Type = 'Table'; Icon = 'hard_drive'
-                Columns = @('Disque', 'Modèle', 'Type', 'Capacité', 'État SMART', 'Température (°C)', 'Usure (%)', 'Heures')
+                Columns = @('Disque', 'Modèle', 'Type', 'Capacité', 'Table', 'État SMART', 'Température (°C)', 'Usure (%)', 'Heures', 'N° de série')
                 Rows = @($rows)
             })
     }
@@ -376,19 +507,56 @@ function Get-ModuleData {
     }
     $withoutSmart = @($disks | Where-Object { -not $script:Smart[$_.Name] })
 
-    # Partitions
-    Invoke-Block 'Partitions' {
-        $partitions = @(Get-Partitions)
-        if ($partitions.Count -gt 0) {
-            $rows = foreach ($p in $partitions) {
-                , @($p.Name, $p.Disk, [Math]::Round($p.Size / 1GB, 1), $p.FsType, $p.Label, $(if ($p.Mount) { $p.Mount } else { $null }), $p.Role)
-            }
-            $sections.Add([PSCustomObject]@{
-                    Title = 'Partitions'; Type = 'Table'; Icon = 'board'
-                    Columns = @('Partition', 'Disque', 'Taille (GiB)', 'Système de fichiers', 'Étiquette', 'Montage', 'Rôle')
-                    Rows = @($rows)
-                })
+    # Partitions (relues toutes les 30 s)
+    $partitions = @(Invoke-Block 'Partitions' { Get-Cached 'partitions' 30 { Get-Partitions } } | Where-Object { $_ })
+    if ($partitions.Count -gt 0) {
+        $rows = foreach ($p in $partitions) {
+            , @($p.Name, $p.Disk, [Math]::Round($p.Size / 1GB, 1), $p.FsType, $p.Label, $(if ($p.Mount) { $p.Mount } else { $null }), $p.Role,
+                $(if ($null -eq $p.Aligned) { $null } elseif ($p.Aligned) { 'Oui' } else { 'Non' }))
         }
+        $sections.Add([PSCustomObject]@{
+                Title = 'Partitions'; Type = 'Table'; Icon = 'board'
+                Columns = @('Partition', 'Disque', 'Taille (GiB)', 'Système de fichiers', 'Étiquette', 'Montage', 'Rôle', 'Alignée (1 MiB)')
+                Rows = @($rows)
+            })
+    }
+
+    # Inodes (Linux) : une jauge par système de fichiers à nombre d'inodes fixe
+    $inodes = @(Invoke-Block 'Inodes' { Get-Cached 'inodes' 30 { Get-Inodes } } | Where-Object { $_ })
+    if ($inodes.Count -gt 0) {
+        $items = foreach ($i in $inodes) {
+            [PSCustomObject]@{
+                Label = $i.Mount; Detail = $i.FsType; Value = $i.Used; Max = $i.Total; Unit = 'inodes'
+                Warning = [Math]::Round($i.Total * 0.85); Critical = [Math]::Round($i.Total * 0.95)
+                Text = '{0} libres' -f ($i.Total - $i.Used).ToString('#,##0', $script:Fr)
+            }
+        }
+        $sections.Add([PSCustomObject]@{ Title = 'Inodes'; Type = 'Usage'; Icon = 'board'; Items = @($items) })
+    }
+
+    # Pools et RAID (seulement s'il y en a)
+    $pools = @(Invoke-Block 'Pools' { Get-Cached 'pools' 30 { Get-Pools } } | Where-Object { $_ })
+    if ($pools.Count -gt 0) {
+        $rows = foreach ($p in $pools) { , @($p.Name, $p.Kind, $(if ($p.Size) { Format-Bytes $p.Size } else { $null }), $p.Members, $p.State) }
+        $sections.Add([PSCustomObject]@{
+                Title = 'Pools, RAID et volumes logiques'; Type = 'Table'; Icon = 'server'
+                Columns = @('Nom', 'Type', 'Taille', 'Membres', 'État'); Rows = @($rows)
+            })
+    }
+
+    # TRIM et volumes à vérifier
+    $trim = Invoke-Block 'TRIM' { Get-Cached 'trim' 60 { Get-TrimInfo $disks } }
+    $dirty = @(Invoke-Block 'Volumes à vérifier' { Get-Cached 'dirty' 300 { Get-DirtyVolumes $volumes } } | Where-Object { $_ })
+    if ($trim -or $dirty.Count -gt 0) {
+        $items = [ordered]@{}
+        if ($trim) {
+            $items['TRIM'] = $trim.Mode
+            if ($IsLinux) { $items['Disques compatibles'] = '{0} sur {1}' -f $trim.Supported, $disks.Count }
+        }
+        $items['Volumes à vérifier'] = if (-not [Environment]::IsPrivilegedProcess) { 'Lecture réservée aux administrateurs' }
+            elseif (($dirty | Where-Object Dirty).Count -gt 0) { ($dirty | Where-Object Dirty | ForEach-Object Mount) -join ', ' }
+            else { 'Aucun' }
+        $sections.Add([PSCustomObject]@{ Title = 'Entretien'; Type = 'KeyValue'; Icon = 'settings'; Items = $items })
     }
 
     # Erreurs : journal (relu toutes les 60 s) et compteurs des systèmes de fichiers
@@ -454,6 +622,27 @@ function Get-ModuleData {
                 'Prévoir le remplacement du SSD.'
         }
     }
+    foreach ($p in $partitions | Where-Object { $_.Aligned -eq $false -and $_.Size -gt 1GB }) {
+        Add-Finding 'warning' 'STO-PART-MISALIGNED' ('Partition {0} non alignée sur 1 MiB' -f $p.Name) `
+            'Sur un SSD, une partition mal alignée réduit les performances et use davantage le disque.'
+    }
+    foreach ($i in $inodes | Where-Object { $_.Used / $_.Total -ge 0.85 }) {
+        Add-Finding $(if ($i.Used / $i.Total -ge 0.95) { 'critical' } else { 'warning' }) 'STO-INODES-FULL' `
+            ('{0} : {1} % des inodes utilisés' -f $i.Mount, [Math]::Floor(100 * $i.Used / $i.Total)) `
+            'Trop de petits fichiers : plus aucun fichier ne pourra être créé même avec de l''espace libre. Nettoyer caches et fichiers temporaires.'
+    }
+    foreach ($p in $pools | Where-Object Degraded) {
+        Add-Finding 'critical' 'STO-RAID-DEGRADED' ('{0} ({1}) : {2}' -f $p.Name, $p.Kind, $p.State) `
+            'Un membre manque ou est en panne : remplacer le disque et reconstruire avant qu''un second ne lâche.'
+    }
+    if ($trim -and $trim.Enabled -eq $false -and ($disks | Where-Object Ssd)) {
+        Add-Finding 'warning' 'STO-TRIM-OFF' 'TRIM désactivé alors qu''un SSD est présent' `
+            $(if ($IsWindows) { 'Réactiver : fsutil behavior set DisableDeleteNotify 0.' } else { 'Activer fstrim.timer (systemctl enable --now fstrim.timer).' })
+    }
+    foreach ($v in $dirty | Where-Object Dirty) {
+        Add-Finding 'warning' 'STO-VOLUME-DIRTY' ('{0} est marqué « à vérifier »' -f $v.Mount) `
+            'Lancer une vérification du système de fichiers (chkdsk / fsck) au prochain redémarrage.'
+    }
     foreach ($c in $counters | Where-Object Errors -gt 0) {
         Add-Finding 'warning' 'STO-FS-ERRORS' ('{0} : {1} erreur(s) de système de fichiers' -f $c.Name, $c.Errors) `
             'Vérifier le système de fichiers (fsck / chkdsk) au prochain redémarrage.'
@@ -476,4 +665,225 @@ function Get-ModuleData {
     [PSCustomObject]@{ Subtitle = $subtitle -join ' · '; Sections = $sections.ToArray(); Findings = $findings.ToArray() }
 }
 
-Export-ModuleMember -Function Get-ModuleData
+#region Fonctions ciblées (module.json › functions)
+
+# Taille d'arborescences sans boucle PowerShell (trop lente sur des centaines de milliers de fichiers) :
+# classe C# compilée une fois par runspace. Ignore les dossiers illisibles et les liens symboliques ; s'arrête
+# à l'échéance (résultat partiel signalé) ; ne descend pas dans les chemins exclus (autres montages, /proc…).
+if (-not ('SysInfo.Storage.DirectorySizer' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+
+namespace SysInfo.Storage
+{
+    public sealed class SizedEntry
+    {
+        public string Path;
+        public long Bytes;
+        public long Files;
+    }
+
+    public sealed class SizeReport
+    {
+        public List<SizedEntry> Folders = new List<SizedEntry>();
+        public List<SizedEntry> LargestFiles = new List<SizedEntry>();
+        public long TotalBytes;
+        public long TotalFiles;
+        public bool TimedOut;
+    }
+
+    public static class DirectorySizer
+    {
+        public static SizeReport Analyze(string root, int topFiles, int timeoutMs, string[] excluded)
+        {
+            var report = new SizeReport();
+            var watch = Stopwatch.StartNew();
+            var skip = new HashSet<string>(excluded ?? new string[0], StringComparer.Ordinal);
+            var largest = new SortedSet<(long, string)>();
+            var options = new EnumerationOptions { IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint, RecurseSubdirectories = false };
+
+            // Fichiers directement à la racine : comptés dans le total, comme une pseudo-entrée.
+            var rootFiles = new SizedEntry { Path = Path.Combine(root, "(fichiers à la racine)") };
+            foreach (var file in new DirectoryInfo(root).EnumerateFiles("*", options)) { Add(file, rootFiles, largest, topFiles); }
+            if (rootFiles.Files > 0) report.Folders.Add(rootFiles);
+
+            foreach (var dir in new DirectoryInfo(root).EnumerateDirectories("*", options))
+            {
+                if (skip.Contains(dir.FullName)) continue;
+                var entry = new SizedEntry { Path = dir.FullName };
+                var stack = new Stack<DirectoryInfo>();
+                stack.Push(dir);
+                while (stack.Count > 0)
+                {
+                    if (watch.ElapsedMilliseconds > timeoutMs) { report.TimedOut = true; break; }
+                    var current = stack.Pop();
+                    try
+                    {
+                        foreach (var file in current.EnumerateFiles("*", options)) Add(file, entry, largest, topFiles);
+                        foreach (var sub in current.EnumerateDirectories("*", options)) if (!skip.Contains(sub.FullName)) stack.Push(sub);
+                    }
+                    catch (Exception) { }
+                }
+                report.Folders.Add(entry);
+                if (report.TimedOut) break;
+            }
+
+            foreach (var f in report.Folders) { report.TotalBytes += f.Bytes; report.TotalFiles += f.Files; }
+            report.Folders.Sort((a, b) => b.Bytes.CompareTo(a.Bytes));
+            foreach (var item in largest.Reverse()) report.LargestFiles.Add(new SizedEntry { Path = item.Item2, Bytes = item.Item1, Files = 1 });
+            return report;
+        }
+
+        private static void Add(FileInfo file, SizedEntry entry, SortedSet<(long, string)> largest, int top)
+        {
+            long length;
+            try { length = file.Length; } catch (Exception) { return; }
+            entry.Bytes += length;
+            entry.Files++;
+            if (top <= 0) return;
+            if (largest.Count < top) { largest.Add((length, file.FullName)); }
+            else if (length > largest.Min.Item1) { largest.Remove(largest.Min); largest.Add((length, file.FullName)); }
+        }
+
+        // Taille d'un seul dossier (récursive), 0 s'il n'existe pas.
+        public static long Size(string path, int timeoutMs)
+        {
+            if (!Directory.Exists(path)) return 0;
+            var parent = Path.GetDirectoryName(path.TrimEnd(Path.DirectorySeparatorChar)) ?? path;
+            var options = new EnumerationOptions { IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint, RecurseSubdirectories = true };
+            long total = 0;
+            var watch = Stopwatch.StartNew();
+            try
+            {
+                foreach (var file in new DirectoryInfo(path).EnumerateFiles("*", options))
+                {
+                    try { total += file.Length; } catch (Exception) { }
+                    if (watch.ElapsedMilliseconds > timeoutMs) break;
+                }
+            }
+            catch (Exception) { }
+            return total;
+        }
+    }
+}
+'@
+}
+
+function New-Finding([string]$Severity, [string]$Code, [string]$Message, [string]$Recommendation) {
+    [PSCustomObject]@{ Severity = $Severity; Code = $Code; Message = $Message; Recommendation = $Recommendation }
+}
+
+# Chemins à ne pas parcourir sous Linux : systèmes de fichiers virtuels et montages réseau.
+function Get-ExcludedMounts {
+    if (-not $IsLinux) { return @() }
+    $real = 'ext2', 'ext3', 'ext4', 'btrfs', 'xfs', 'vfat', 'exfat', 'ntfs', 'ntfs3', 'f2fs', 'zfs', 'jfs', 'reiserfs', 'bcachefs'
+    @(Invoke-Tool findmnt @('-n', '-l', '-o', 'TARGET,FSTYPE') | ForEach-Object {
+            $f = $_ -split '\s+', 2
+            if ($f[1] -notin $real) { $f[0] }
+        }) + @('/proc', '/sys', '/dev', '/run')
+}
+
+# storage_analyze_space : plus gros dossiers (un niveau sous le chemin, tailles cumulées) et plus gros fichiers.
+function Get-SISpaceUsage {
+    param(
+        [string]$Path,
+        [ValidateRange(1, 100)][int]$Top = 20,
+        [ValidateRange(1, 120)][int]$TimeoutSeconds = 30
+    )
+    if (-not $Path) { $Path = if ($IsWindows) { $env:SystemDrive + '\' } else { $HOME } }
+    $Path = [System.IO.Path]::GetFullPath($Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) { throw "Dossier introuvable : $Path" }
+
+    $report = [SysInfo.Storage.DirectorySizer]::Analyze($Path, $Top, $TimeoutSeconds * 1000, [string[]](Get-ExcludedMounts))
+    $folders = foreach ($f in $report.Folders | Select-Object -First $Top) {
+        , @($f.Path, [Math]::Round($f.Bytes / 1GB, 2), $f.Files, $(if ($report.TotalBytes -gt 0) { [Math]::Round(100 * $f.Bytes / $report.TotalBytes, 1) } else { 0 }))
+    }
+    $files = foreach ($f in $report.LargestFiles) { , @($f.Path, [Math]::Round($f.Bytes / 1GB, 2)) }
+
+    $subtitle = '{0} · {1} dans {2} fichier(s)' -f $Path, (Format-Bytes $report.TotalBytes), $report.TotalFiles.ToString('#,##0', $script:Fr)
+    $findings = @()
+    if ($report.TimedOut) {
+        $subtitle += ' · résultat partiel'
+        $findings += New-Finding 'info' 'STO-SCAN-PARTIAL' ("Analyse arrêtée après $TimeoutSeconds s : les tailles sont sous-estimées") 'Relancer sur un sous-dossier, ou avec un délai plus long.'
+    }
+    [PSCustomObject]@{
+        Subtitle = $subtitle
+        Sections = @(
+            [PSCustomObject]@{ Title = 'Plus gros dossiers'; Type = 'Table'; Icon = 'hard_drive'; Columns = @('Dossier', 'Taille (GiB)', 'Fichiers', 'Part (%)'); Rows = @($folders) }
+            [PSCustomObject]@{ Title = 'Plus gros fichiers'; Type = 'Table'; Icon = 'search'; Columns = @('Fichier', 'Taille (GiB)'); Rows = @($files) }
+        )
+        Findings = $findings
+    }
+}
+
+# storage_get_reclaimable_space : estimation de l'espace libérable par catégorie, sans rien supprimer.
+# Windows : Temp (utilisateur, Windows), corbeille de l'utilisateur, cache Windows Update, journaux CBS, miniatures,
+#           caches des navigateurs, vidages mémoire.
+# Linux   : /tmp, /var/tmp, corbeille, ~/.cache, cache des paquets (dnf, apt, pacman), journal systemd,
+#           Docker (docker system df), Flatpak inutilisés non comptés.
+function Get-SIReclaimableSpace {
+    param([ValidateRange(5, 120)][int]$TimeoutSeconds = 30)
+    $budget = [System.Diagnostics.Stopwatch]::StartNew()
+    $left = { [Math]::Max(500, $TimeoutSeconds * 1000 - $budget.ElapsedMilliseconds) }
+    $size = { param([string]$Path) [SysInfo.Storage.DirectorySizer]::Size($Path, (& $left)) }
+
+    $rows = [System.Collections.Generic.List[object]]::new()
+    # Sous 10 MiB : sans intérêt, la ligne est omise.
+    $add = { param($Category, $Bytes, $Where, $How) if ($Bytes -ge 10MB) { $rows.Add(@($Category, [Math]::Round($Bytes / 1GB, 2), $Where, $How)) } }
+
+    if ($IsWindows) {
+        $local = $env:LOCALAPPDATA
+        & $add 'Fichiers temporaires (utilisateur)' (& $size $env:TEMP) $env:TEMP 'Nettoyage de disque, ou supprimer le contenu'
+        & $add 'Fichiers temporaires (Windows)' (& $size "$env:WINDIR\Temp") "$env:WINDIR\Temp" 'Nettoyage de disque (administrateur)'
+        $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+        $bins = Get-PSDrive -PSProvider FileSystem | ForEach-Object { Join-Path $_.Root "`$Recycle.Bin\$sid" }
+        & $add 'Corbeille' (($bins | ForEach-Object { & $size $_ } | Measure-Object -Sum).Sum) 'Corbeille' 'Vider la corbeille'
+        & $add 'Cache Windows Update' (& $size "$env:WINDIR\SoftwareDistribution\Download") "$env:WINDIR\SoftwareDistribution\Download" 'Nettoyage de disque › Nettoyage de Windows Update'
+        & $add 'Journaux de maintenance (CBS)' (& $size "$env:WINDIR\Logs\CBS") "$env:WINDIR\Logs\CBS" 'Nettoyage de disque (administrateur)'
+        & $add 'Vidages mémoire' ((& $size "$env:WINDIR\Minidump") + $(if (Test-Path "$env:WINDIR\MEMORY.DMP") { (Get-Item "$env:WINDIR\MEMORY.DMP").Length } else { 0 })) "$env:WINDIR\Minidump, MEMORY.DMP" 'Garder si un écran bleu est en cours d''analyse'
+        & $add 'Miniatures' ((Get-ChildItem "$local\Microsoft\Windows\Explorer" -Filter 'thumbcache_*.db' -ErrorAction SilentlyContinue | Measure-Object Length -Sum).Sum) "$local\Microsoft\Windows\Explorer" 'Nettoyage de disque › Miniatures'
+        foreach ($browser in @(@('Chrome', "$local\Google\Chrome\User Data\Default\Cache"), @('Edge', "$local\Microsoft\Edge\User Data\Default\Cache"), @('Firefox', "$local\Mozilla\Firefox\Profiles"))) {
+            & $add "Cache $($browser[0])" (& $size $browser[1]) $browser[1] 'Effacer le cache depuis le navigateur'
+        }
+    }
+    else {
+        & $add 'Fichiers temporaires' ((& $size '/tmp') + (& $size '/var/tmp')) '/tmp, /var/tmp' 'Vidés au redémarrage (/tmp) ou par systemd-tmpfiles'
+        & $add 'Corbeille' (& $size "$HOME/.local/share/Trash") "$HOME/.local/share/Trash" 'Vider la corbeille'
+        & $add 'Cache utilisateur' (& $size "$HOME/.cache") "$HOME/.cache" 'Supprimable : les applications le recréent'
+        foreach ($pkg in @(@('dnf', '/var/cache/dnf', 'sudo dnf clean all'), @('apt', '/var/cache/apt/archives', 'sudo apt clean'), @('pacman', '/var/cache/pacman/pkg', 'sudo paccache -r'))) {
+            & $add "Cache des paquets ($($pkg[0]))" (& $size $pkg[1]) $pkg[1] $pkg[2]
+        }
+        $journal = Invoke-Tool journalctl @('--disk-usage') | Select-Object -First 1
+        if ($journal -match 'take up ([\d.]+)([KMGT])') {
+            $bytes = [double]::Parse($Matches[1], [cultureinfo]::InvariantCulture) * @{ K = 1KB; M = 1MB; G = 1GB; T = 1TB }[$Matches[2]]
+            & $add 'Journal systemd' $bytes '/var/log/journal' 'sudo journalctl --vacuum-time=4weeks (garder l''historique récent)'
+        }
+        foreach ($line in Invoke-Tool docker @('system', 'df', '--format', '{{json .}}')) {
+            $d = $line | ConvertFrom-Json
+            if ($d.Reclaimable -match '^([\d.]+)([kMGT]?B)') {
+                $bytes = [double]::Parse($Matches[1], [cultureinfo]::InvariantCulture) * @{ B = 1; kB = 1e3; MB = 1e6; GB = 1e9; TB = 1e12 }[$Matches[2]]
+                & $add "Docker : $($d.Type)" $bytes 'docker system df' 'docker system prune (vérifier avant : supprime images et volumes inutilisés)'
+            }
+        }
+    }
+
+    $total = ($rows | ForEach-Object { $_[1] } | Measure-Object -Sum).Sum
+    $sorted = $rows | Sort-Object { $_[1] } -Descending
+    $findings = @()
+    if ($total -ge 10) {
+        $findings += New-Finding 'info' 'STO-RECLAIMABLE' ('{0} GiB récupérables (temporaires, caches, corbeille…)' -f ([double]$total).ToString('0.#', $script:Fr)) `
+            'Les actions de nettoyage du module Maintenance (à venir) les libéreront avec confirmation.'
+    }
+    [PSCustomObject]@{
+        Subtitle = 'Environ {0} GiB récupérables · estimation, rien n''est supprimé' -f ([double]$total).ToString('0.##', $script:Fr)
+        Sections = @([PSCustomObject]@{ Title = 'Espace récupérable'; Type = 'Table'; Icon = 'hard_drive'; Columns = @('Catégorie', 'Taille (GiB)', 'Emplacement', 'Comment libérer'); Rows = @($sorted) })
+        Findings = $findings
+    }
+}
+
+#endregion
+
+Export-ModuleMember -Function Get-ModuleData, Get-SISpaceUsage, Get-SIReclaimableSpace

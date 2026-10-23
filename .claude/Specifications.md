@@ -7,30 +7,33 @@
 
 # Partie 1 — Notes de travail
 
-## 1. État au 2026-10-23
+## 1. État au 2026-10-23 (fin de S1)
 
-4 modules sur 21 existent, et chacun ne couvre qu'une partie de sa fiche. Le serveur MCP fonctionne (`get_system`, `get_hardware`, `get_network`, `get_storage`, testé en stdio sous Linux).
+4 modules sur 21 existent ; leur fiche du catalogue est couverte en lecture (niveau L), hors restes listés au §2.
+Le MCP expose 15 outils : `get_system`, `get_hardware`, `get_network`, `get_storage` et 11 fonctions ciblées.
 
-| # | Module | État | Couvert aujourd'hui |
+| # | Module | Vue d'ensemble (onglet, `get_<id>`) | Fonctions ciblées (carte « Outils », MCP) |
 |---|---|---|---|
-| 1 | Système | partiel | CPU %, RAM %, temp. CPU ; OS (nom, noyau, arch, machine, utilisateur, boot, uptime, nb processus) ; CPU (modèle, cœurs, threads, fréquences) ; mémoire + swap ; top 15 processus (nom, PID, CPU, RAM) ; capteurs de température |
-| 2 | Matériel | partiel | GPU % / VRAM / temp. ; carte mère ; BIOS/UEFI + mode + Secure Boot ; GPU + pilote ; RAM (slots utilisés, max, type, vitesse) + barrettes ; pilotes ; périphériques en erreur |
-| 3 | Réseau | partiel | débit, latence Internet/passerelle ; connexion principale ; DNS ; DHCP ; interfaces ; routes ; ports en écoute ; connexions TCP ; traceroute fixe vers 1.1.1.1 |
-| 4 | Stockage | partiel | remplissage des volumes ; activité disque ; disques + SMART résumé ; SMART détaillé ; partitions ; compteurs d'erreurs FS ; journal stockage 7 jours |
+| 1 | Système | CPU total et par thread, mémoire (cache, engagée, swap), température ; OS (version, build, installation, démarrage, arrêt précédent propre ou inattendu) ; machine (fabricant, modèle, domaine, physique ou VM) ; CPU (fréquences, caches) ; top 15 processus ; date, fuseau, NTP ; langue, formats, clavier ; capteurs | `system_get_processes` (tri CPU / mémoire / E/S / nom, filtre, utilisateur, chemin, signature Windows, ligne de commande masquée), `system_get_process_tree` |
+| 2 | Matériel | GPU en direct ; carte mère (n° de série si lisible) ; BIOS/UEFI, Secure Boot ; TPM ; cartes graphiques (VRAM) ; écrans (EDID : nom, connectique, définition, diagonale, année) ; audio (sorties, entrées, par défaut) ; USB ; Bluetooth connecté ; RAM et barrettes ; pilotes (date, éditeur ou origine, signé) ; périphériques en erreur | — |
+| 3 | Réseau | débit, latence, perte ; connexion principale (Wi-Fi : bande, canal, sécurité, débit radio) ; DNS (suffixes, test de résolution, cache Windows) ; DHCP ; interfaces ; réseaux Wi-Fi visibles ; voisins ARP ; routes ; ports ; connexions TCP ; VPN ; partages et lecteurs réseau ; proxy et hosts ; traceroute 1.1.1.1 | `network_ping`, `network_traceroute`, `network_test_port`, `network_test_mtu`, `network_get_public_ip`, `network_discover_lan` (balayage /24, ARP, DNS, mDNS), `network_resolve_dns` |
+| 4 | Stockage | remplissage ; activité ; disques (table GPT/MBR, n° de série, SMART) ; SMART détaillé ; partitions (alignement) ; inodes ; pools, RAID, Btrfs, LVM, ZFS ; TRIM ; volumes « dirty » (admin) ; erreurs | `storage_analyze_space` (plus gros dossiers et fichiers, classe C# compilée au premier appel), `storage_get_reclaimable_space` (estimation par catégorie, rien n'est supprimé) |
 | 5–21 | autres | à faire | — |
 
-## 2. Manques des modules existants (lecture seule, niveau L)
+Constats ajoutés en S1 : `SYS-SWAP-HIGH`, `SYS-UNEXPECTED-SHUTDOWN`, `SYS-TIME-NOT-SYNCED`, `SYS-PROC-UNSIGNED` ; `HW-GPU-HOT`, `HW-TPM-MISSING`, `HW-TPM-OLD`, `HW-DRIVER-UNSIGNED`, `HW-DRIVER-OLD`, `HW-DEVICE-ERROR` ; `NET-NO-CONNECTION`, `NET-PACKET-LOSS`, `NET-LATENCY-HIGH`, `NET-WIFI-WEAK`, `NET-WIFI-INSECURE`, `NET-LINK-SLOW`, `NET-DNS-FAIL`, `NET-DNS-SLOW`, `NET-HOSTS-CUSTOM`, `NET-PROXY`, `NET-HOST-UNREACHABLE`, `NET-PING-LOSS`, `NET-TRACE-INCOMPLETE`, `NET-MTU-LOW`, `NET-DNS-NO-ANSWER` ; `STO-PART-MISALIGNED`, `STO-INODES-FULL`, `STO-RAID-DEGRADED`, `STO-TRIM-OFF`, `STO-VOLUME-DIRTY`, `STO-SCAN-PARTIAL`, `STO-RECLAIMABLE`.
 
-**Système** : édition, build, date d'installation · domaine/workgroup, fabricant, modèle · cache CPU, charge par cœur · commit, cache, pagefile · dernier arrêt propre · processus : arbre, ligne de commande, chemin, signature, utilisateur, top I/O · heure, fuseau, synchro NTP · langue, clavier, formats · VM / hyperviseur détecté.
-Action A : tuer un processus, changer sa priorité.
+Fenêtre : carte « Outils » générique en bas de chaque page (formulaire depuis `module.json`, runspace séparé).
 
-**Matériel** : n° série carte mère · TPM (présence, version, état) · VRAM totale dans la liste GPU · écrans (modèle, résolution, fréquence, EDID) · audio (périphériques, sortie par défaut) · USB / Bluetooth connectés · pilotes : date, éditeur, non signés, très anciens · explication du code d'erreur des périphériques.
-Action C : désactiver/réactiver un périphérique, réinstaller un pilote.
+## 2. Restes des modules 1 à 4
 
-**Réseau** : ARP / voisins · DNS : suffixes, test de résolution, cache · Wi-Fi : canal, bande, sécurité, réseaux voisins · ping / traceroute / test de port / MTU vers une cible au choix · IP publique · proxy, fichier hosts · partages SMB, lecteurs mappés · VPN actifs · découverte LAN (mDNS, voisins).
-Action A : flush DNS, renouveler le bail. Action C : reset Winsock / pile IP, désactiver une carte.
+Actions (niveaux A / C, sprint S4) : tuer un processus / changer sa priorité ; désactiver un périphérique, réinstaller un pilote ; vider le cache DNS, renouveler le bail DHCP ; reset Winsock / pile IP, désactiver une carte.
 
-**Stockage** : bus et n° série des disques · GPT/MBR, alignement · inodes · analyse d'espace (plus gros dossiers, Temp, corbeille, WinSxS) · pools / RAID (Storage Spaces, LVM, mdadm, ZFS, Btrfs) · TRIM · volume « dirty ». Le chiffrement relève de Sécurité.
+Limites connues, à reprendre si besoin :
+
+- **Non testé sous Windows** : tout le code Windows de S1 a été écrit d'après la documentation des cmdlets et classes CIM, sans exécution. Priorité : une passe de test sur un poste Windows.
+- Windows : périphérique audio par défaut non exposé (API COM) ; proxy WinHTTP non lu (seul le proxy utilisateur) ; pas de mDNS dans la découverte du réseau local.
+- Linux : fréquence de rafraîchissement des écrans indisponible dans /sys (définition native seulement) ; n° de série de la carte mère et état ext4 « dirty » lisibles en root seulement ; taille du cache DNS retirée (`resolvectl statistics` prend 2 à 3 s).
+- Analyse WinSxS (DISM, admin) : avec le module Maintenance.
 
 ## 3. Écarts avec le contrat actuel (à trancher avant de coder)
 
@@ -54,7 +57,7 @@ Le catalogue suppose un socle plus riche que celui décrit dans `CLAUDE.md` et `
 | Sprint | Contenu | Niveau |
 |---|---|---|
 | S0 ✅ | Socle v2 : décisions §3, `Findings`, métadonnées `Level`, paramètres, nommage MCP, mise à jour de `CLAUDE.md` et `PROJECT_CONTEXT.md` | — |
-| S1 | Compléter Système, Matériel, Réseau, Stockage (manques §2), constats pour Matériel et Réseau | L |
+| S1 ✅ | Compléter Système, Matériel, Réseau, Stockage, constats pour Matériel et Réseau, carte « Outils » | L |
 | S2 | Événements, Services | L |
 | S3 | Sécurité, Logiciels | L |
 | S4 | Cadre des actions A/C (confirmation, dry-run, point de restauration) + tâches longues (job id) + Audit & Traçabilité (JSONL) + Maintenance + actions A/C des modules 1–8 | A / C |

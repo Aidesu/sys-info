@@ -1,12 +1,16 @@
-# Module Matériel : carte mère, BIOS/UEFI, GPU, RAM, pilotes, périphériques en erreur.
+# Module Matériel : carte mère, BIOS/UEFI, TPM, GPU, écrans, audio, USB/Bluetooth, RAM, pilotes,
+# périphériques en erreur.
 #
 # Sources
 #   Windows : CIM (Win32_BaseBoard, Win32_ComputerSystem, Win32_BIOS, Win32_VideoController,
-#             Win32_PhysicalMemory, Win32_PhysicalMemoryArray, Win32_PnPSignedDriver, Win32_PnPEntity),
-#             registre (HKLM\SYSTEM\CurrentControlSet\Control\SecureBoot\State), nvidia-smi.
-#   Linux   : /sys/class/dmi/id, /sys/firmware/efi, udev (udevadm info : barrettes mémoire sans droits root,
-#             sinon dmidecode en root), lspci + /sys/bus/pci/devices (pilotes), /sys/module (versions),
-#             nvidia-smi (NVIDIA) ou /sys/class/drm (AMD).
+#             Win32_PhysicalMemory, Win32_PhysicalMemoryArray, Win32_PnPSignedDriver, Win32_PnPEntity, Win32_Tpm,
+#             root/wmi WmiMonitorID + WmiMonitorBasicDisplayParams + WmiMonitorConnectionParams),
+#             Get-PnpDevice (AudioEndpoint, Bluetooth, SecurityDevices), registre (SecureBoot\State,
+#             classe Display : HardwareInformation.qwMemorySize), nvidia-smi.
+#   Linux   : /sys/class/dmi/id, /sys/firmware/efi, /sys/class/tpm, /sys/class/drm (connecteurs, EDID, modes),
+#             udev (udevadm info : barrettes mémoire sans droits root, sinon dmidecode en root),
+#             lspci + /sys/bus/pci/devices (pilotes), /sys/module (versions, taint), /sys/bus/usb/devices,
+#             pactl (PipeWire / PulseAudio) ou /proc/asound, bluetoothctl, nvidia-smi (NVIDIA) ou /sys/class/drm (AMD).
 #
 # Les infos fixes (carte mère, BIOS, RAM, cartes graphiques, pilotes sous Windows) sont lues au premier appel
 # puis gardées dans $script: ; chaque rafraîchissement relit seulement le GPU et les périphériques en erreur.
@@ -116,10 +120,14 @@ function Get-LinuxPciDevices {
         $driverLink = Join-Path $dir.FullName 'driver'
         $driver = if (Test-Path -LiteralPath $driverLink) { Split-Path -Leaf (Get-Item -LiteralPath $driverLink).Target } else { $null }
         $version = $null
+        $taint = $null
         if ($driver) {
             # Version du module si elle est publiée, sinon pilote intégré au noyau.
-            $version = Read-SysFile "/sys/module/$($driver -replace '-', '_')/version"
+            $module = $driver -replace '-', '_'
+            $version = Read-SysFile "/sys/module/$module/version"
             if (-not $version) { $version = "noyau $kernel" }
+            # taint : P propriétaire, O hors de l'arbre du noyau, E non signé ; vide = module du noyau.
+            $taint = Read-SysFile "/sys/module/$module/taint"
         }
         $name = $names[$slot]
         [PSCustomObject]@{
@@ -130,7 +138,19 @@ function Get-LinuxPciDevices {
             Name     = if ($name) { $name.Device } else { "Périphérique $slot" }
             Driver   = $driver
             Version  = $version
+            Taint    = $taint
         }
+    }
+}
+
+# Origine d'un module Linux d'après son taint, et s'il est signé (E = non signé).
+function Get-ModuleOrigin([string]$Taint) {
+    $parts = @()
+    if ($Taint -match 'O') { $parts += 'hors noyau' }
+    if ($Taint -match 'P') { $parts += 'propriétaire' }
+    [PSCustomObject]@{
+        Origin = if ($parts) { 'Module ' + ($parts -join ', ') } else { 'Noyau' }
+        Signed = $Taint -notmatch 'E'
     }
 }
 
@@ -194,6 +214,7 @@ function Get-LinuxStatic {
     Add-Item $board 'Fabricant' (Read-SysFile "$dmi/board_vendor")
     Add-Item $board 'Modèle' (Read-SysFile "$dmi/board_name")
     Add-Item $board 'Version' (Read-SysFile "$dmi/board_version")
+    Add-Item $board 'N° de série' (Read-SysFile "$dmi/board_serial")   # lisible en root seulement
     Add-Item $board 'Système' (('{0} {1}' -f (Read-SysFile "$dmi/sys_vendor"), (Read-SysFile "$dmi/product_name")).Trim())
 
     $bios = [ordered]@{}
@@ -228,6 +249,7 @@ function Get-WindowsStatic {
     Add-Item $board 'Fabricant' $baseboard.Manufacturer
     Add-Item $board 'Modèle' $baseboard.Product
     Add-Item $board 'Version' $baseboard.Version
+    Add-Item $board 'N° de série' $baseboard.SerialNumber
     Add-Item $board 'Système' (('{0} {1}' -f $system.Manufacturer, $system.Model).Trim())
 
     $biosInfo = Get-CimInstance -ClassName Win32_BIOS
@@ -273,6 +295,9 @@ function Get-WindowsStatic {
                 Category = $_.DeviceClass
                 Driver   = $_.DriverProviderName
                 Version  = $_.DriverVersion
+                Date     = $_.DriverDate
+                Signed   = [bool]$_.IsSigned
+                Origin   = $null
             }
         }
 
@@ -281,22 +306,244 @@ function Get-WindowsStatic {
 
 #endregion
 
+#region TPM, écrans, audio, USB, Bluetooth
+
+# TPM : présence, version, fabricant, état.
+# Windows : Win32_Tpm (root/cimv2/Security/MicrosoftTpm, droits administrateur), sinon Get-PnpDevice SecurityDevices.
+# Linux   : /sys/class/tpm/tpm0 (tpm_version_major), fabricant via /sys/class/tpm/tpm0/device/firmware_node ou description.
+function Get-TpmInfo {
+    $items = [ordered]@{}
+    if ($IsWindows) {
+        $tpm = try { Get-CimInstance -Namespace root/cimv2/Security/MicrosoftTpm -ClassName Win32_Tpm -ErrorAction Stop } catch { $null }
+        if ($tpm) {
+            $items['Présent'] = 'Oui'
+            $items['Version'] = ($tpm.SpecVersion -split ',')[0].Trim()
+            Add-Item $items 'Fabricant' $tpm.ManufacturerIdTxt
+            $items['Activé'] = if ($tpm.IsEnabled_InitialValue) { 'Oui' } else { 'Non' }
+            $items['Prêt'] = if ($tpm.IsActivated_InitialValue -and $tpm.IsOwned_InitialValue) { 'Oui' } else { 'Non' }
+            return [PSCustomObject]@{ Present = $true; Major = [int](($tpm.SpecVersion -split '[,.]')[0]); Items = $items }
+        }
+        $device = Get-PnpDevice -Class SecurityDevices -PresentOnly -ErrorAction SilentlyContinue | Where-Object FriendlyName -like '*Trusted Platform*' | Select-Object -First 1
+        if ($device) {
+            $items['Présent'] = 'Oui'
+            $items['Périphérique'] = $device.FriendlyName
+            $items['Détail'] = 'Version et état lisibles avec les droits administrateur'
+            $major = if ($device.FriendlyName -match '(\d)\.\d') { [int]$Matches[1] } else { $null }
+            return [PSCustomObject]@{ Present = $true; Major = $major; Items = $items }
+        }
+        $items['Présent'] = 'Non détecté'
+        return [PSCustomObject]@{ Present = $false; Major = $null; Items = $items }
+    }
+
+    $tpm = Get-ChildItem -Path /sys/class/tpm -ErrorAction SilentlyContinue | Where-Object Name -Match '^tpm\d+$' | Select-Object -First 1
+    if (-not $tpm) {
+        $items['Présent'] = 'Non détecté'
+        return [PSCustomObject]@{ Present = $false; Major = $null; Items = $items }
+    }
+    $major = Read-SysFile (Join-Path $tpm.FullName 'tpm_version_major')
+    $items['Présent'] = 'Oui'
+    $items['Version'] = if ($major) { "$major.0" } else { 'Inconnue' }
+    $hid = Read-SysFile (Join-Path $tpm.FullName 'device/firmware_node/hid')
+    if ($hid) { $items['Interface'] = $hid -replace '^MSFT0101$', 'TPM 2.0 (ACPI MSFT0101)' }
+    $items['Périphérique'] = '/dev/' + $tpm.Name
+    [PSCustomObject]@{ Present = $true; Major = if ($major) { [int]$major } else { $null }; Items = $items }
+}
+
+# Identifiants PNP des fabricants d'écrans les plus courants (EDID) → nom.
+$script:MonitorVendors = @{
+    ACR = 'Acer'; AOC = 'AOC'; AUS = 'ASUS'; BNQ = 'BenQ'; DEL = 'Dell'; ENC = 'Eizo'; GSM = 'LG'; HWP = 'HP'; IVM = 'Iiyama'
+    LEN = 'Lenovo'; MSI = 'MSI'; NEC = 'NEC'; PHL = 'Philips'; SAM = 'Samsung'; SEC = 'Samsung'; SNY = 'Sony'; VSC = 'ViewSonic'
+    APP = 'Apple'; AUO = 'AU Optronics'; BOE = 'BOE'; CMN = 'Chimei Innolux'; LGD = 'LG Display'; SHP = 'Sharp'; GBT = 'Gigabyte'
+}
+
+# Décode un bloc EDID (128 octets) : fabricant (3 lettres), nom (descripteur 0xFC), taille (cm), année.
+function ConvertFrom-Edid([byte[]]$Edid) {
+    if (-not $Edid -or $Edid.Count -lt 128) { return $null }
+    $id = ([int]$Edid[8] -shl 8) -bor $Edid[9]
+    $vendor = -join @([char](64 + (($id -shr 10) -band 31)), [char](64 + (($id -shr 5) -band 31)), [char](64 + ($id -band 31)))
+    $name = $null; $serial = $null
+    foreach ($offset in 54, 72, 90, 108) {
+        if ($Edid[$offset] -eq 0 -and $Edid[$offset + 1] -eq 0) {
+            $text = ([System.Text.Encoding]::ASCII.GetString($Edid, $offset + 5, 13) -split "`n")[0].Trim()
+            if ($Edid[$offset + 3] -eq 0xFC) { $name = $text }
+        }
+    }
+    $widthCm = $Edid[21]; $heightCm = $Edid[22]
+    [PSCustomObject]@{
+        Vendor = $script:MonitorVendors[$vendor] ?? $vendor
+        Name   = $name
+        Inches = if ($widthCm -gt 0 -and $heightCm -gt 0) { [Math]::Round([Math]::Sqrt($widthCm * $widthCm + $heightCm * $heightCm) / 2.54, 1) } else { $null }
+        Year   = if ($Edid[17] -gt 0) { 1990 + $Edid[17] } else { $null }
+    }
+}
+
+# Écrans connectés.
+# Windows : WmiMonitorID (nom, fabricant, année), WmiMonitorBasicDisplayParams (taille), WmiMonitorConnectionParams
+#           (connectique) ; définition et fréquence de l'affichage principal via Win32_VideoController.
+# Linux   : /sys/class/drm/card*-<connecteur>/ : status, edid, modes (le premier = définition native).
+function Get-Displays {
+    if ($IsWindows) {
+        $outputs = @{ -2 = 'Autre'; -1 = 'Autre'; 0 = 'VGA'; 4 = 'DVI'; 5 = 'HDMI'; 10 = 'DisplayPort'; 11 = 'DisplayPort (intégré)'; 2147483648L = 'Écran interne' }
+        $ids = @(Get-CimInstance -Namespace root/wmi -ClassName WmiMonitorID -ErrorAction SilentlyContinue)
+        $sizes = @{}; foreach ($b in Get-CimInstance -Namespace root/wmi -ClassName WmiMonitorBasicDisplayParams -ErrorAction SilentlyContinue) { $sizes[$b.InstanceName] = $b }
+        $links = @{}; foreach ($c in Get-CimInstance -Namespace root/wmi -ClassName WmiMonitorConnectionParams -ErrorAction SilentlyContinue) { $links[$c.InstanceName] = $c }
+        $decode = { param($chars) if ($chars) { (-join ($chars | Where-Object { $_ -gt 0 } | ForEach-Object { [char]$_ })).Trim() } }
+        $list = foreach ($m in $ids) {
+            $size = $sizes[$m.InstanceName]
+            $inches = if ($size -and $size.MaxHorizontalImageSize -gt 0) {
+                [Math]::Round([Math]::Sqrt([Math]::Pow($size.MaxHorizontalImageSize, 2) + [Math]::Pow($size.MaxVerticalImageSize, 2)) / 2.54, 1)
+            } else { $null }
+            $tech = $links[$m.InstanceName].VideoOutputTechnology
+            [PSCustomObject]@{
+                Name = & $decode $m.UserFriendlyName; Vendor = & $decode $m.ManufacturerName
+                Connector = if ($null -ne $tech -and $outputs.ContainsKey([long]$tech)) { $outputs[[long]$tech] } else { $null }
+                Mode = $null; Inches = $inches; Year = if ($m.YearOfManufacture -gt 0) { [int]$m.YearOfManufacture } else { $null }
+            }
+        }
+        return $list
+    }
+
+    foreach ($connector in Get-ChildItem -Path /sys/class/drm -ErrorAction SilentlyContinue | Where-Object Name -Match '^card\d+-') {
+        if ((Read-SysFile (Join-Path $connector.FullName 'status')) -ne 'connected') { continue }
+        $edid = try { [System.IO.File]::ReadAllBytes((Join-Path $connector.FullName 'edid')) } catch { $null }
+        $info = ConvertFrom-Edid $edid
+        $mode = Get-Content -LiteralPath (Join-Path $connector.FullName 'modes') -TotalCount 1 -ErrorAction SilentlyContinue
+        [PSCustomObject]@{
+            Name = $info.Name; Vendor = $info.Vendor
+            Connector = ($connector.Name -replace '^card\d+-', '') -replace '-A-', '-'
+            Mode = $mode; Inches = $info.Inches; Year = $info.Year
+        }
+    }
+}
+
+# Résolution et fréquence de l'affichage principal (Windows seulement : une ligne par carte graphique active).
+function Get-WindowsDisplayModes {
+    Get-CimInstance -ClassName Win32_VideoController | Where-Object CurrentHorizontalResolution | ForEach-Object {
+        '{0} × {1} à {2} Hz ({3})' -f $_.CurrentHorizontalResolution, $_.CurrentVerticalResolution, $_.CurrentRefreshRate, $_.Name
+    }
+}
+
+# Périphériques audio.
+# Windows : points de terminaison (Get-PnpDevice AudioEndpoint) ; le périphérique par défaut n'est pas exposé sans COM.
+# Linux   : pactl --format=json list sinks / sources (PipeWire ou PulseAudio) + périphériques par défaut ;
+#           sinon cartes ALSA (/proc/asound/cards).
+function Get-AudioDevices {
+    if ($IsWindows) {
+        return Get-PnpDevice -Class AudioEndpoint -PresentOnly -ErrorAction SilentlyContinue | ForEach-Object {
+            [PSCustomObject]@{ Name = $_.FriendlyName; Kind = $null; Default = $null; State = if ($_.Status -eq 'OK') { 'Disponible' } else { $_.Status } }
+        }
+    }
+
+    if (Get-Command pactl -ErrorAction SilentlyContinue) {
+        $defaultSink = & pactl get-default-sink 2>$null
+        $defaultSource = & pactl get-default-source 2>$null
+        $states = @{ RUNNING = 'En cours'; IDLE = 'Inactif'; SUSPENDED = 'En veille' }
+        $list = foreach ($kind in 'sinks', 'sources') {
+            $json = & pactl --format=json list $kind 2>$null
+            if (-not $json) { continue }
+            foreach ($d in ($json | ConvertFrom-Json)) {
+                if ($kind -eq 'sources' -and $d.name -like '*.monitor') { continue }   # retour des sorties : pas un micro
+                [PSCustomObject]@{
+                    Name    = $d.description
+                    Kind    = if ($kind -eq 'sinks') { 'Sortie' } else { 'Entrée' }
+                    Default = ($d.name -in @($defaultSink, $defaultSource))
+                    State   = $states[$d.state] ?? $d.state
+                }
+            }
+        }
+        if ($list) { return $list }
+    }
+
+    Get-Content -Path /proc/asound/cards -ErrorAction SilentlyContinue | Where-Object { $_ -match '^\s*\d+ \[' } | ForEach-Object {
+        [PSCustomObject]@{ Name = ($_ -replace '^\s*\d+ \[[^\]]*\]:\s*', '').Trim(); Kind = 'Carte'; Default = $null; State = $null }
+    }
+}
+
+# Périphériques USB connectés (hors concentrateurs).
+# Windows : Win32_PnPEntity dont l'identifiant commence par USB\VID_ (périphérique racine, pas ses interfaces).
+# Linux   : /sys/bus/usb/devices/<bus>-<port> : idVendor, idProduct, manufacturer, product, speed, bDeviceClass.
+function Get-UsbDevices {
+    if ($IsWindows) {
+        return Get-CimInstance -ClassName Win32_PnPEntity -Filter "PNPDeviceID LIKE 'USB\\VID%' AND NOT PNPDeviceID LIKE '%&MI[_]%'" -ErrorAction SilentlyContinue |
+            Where-Object { $_.PNPClass -ne 'USB' -or $_.Name -notmatch 'hub|concentrateur' } | ForEach-Object {
+                $vidpid = if ($_.PNPDeviceID -match 'VID_([0-9A-F]{4})&PID_([0-9A-F]{4})') { '{0}:{1}' -f $Matches[1].ToLower(), $Matches[2].ToLower() } else { $null }
+                [PSCustomObject]@{ Name = $_.Name; Vendor = $_.Manufacturer; Id = $vidpid; Speed = $null; Category = $_.PNPClass }
+            }
+    }
+
+    $speeds = @{ '1.5' = 'USB 1 (1,5 Mbit/s)'; '12' = 'USB 1 (12 Mbit/s)'; '480' = 'USB 2'; '5000' = 'USB 3 (5 Gbit/s)'; '10000' = 'USB 3 (10 Gbit/s)'; '20000' = 'USB 3 (20 Gbit/s)' }
+    foreach ($dir in Get-ChildItem -Path /sys/bus/usb/devices -ErrorAction SilentlyContinue | Where-Object Name -Match '^\d+-[\d.]+$') {
+        $class = Read-SysFile (Join-Path $dir.FullName 'bDeviceClass')
+        if ($class -eq '09') { continue }   # concentrateur
+        $vendorId = Read-SysFile (Join-Path $dir.FullName 'idVendor')
+        $speed = Read-SysFile (Join-Path $dir.FullName 'speed')
+        [PSCustomObject]@{
+            Name     = (Read-SysFile (Join-Path $dir.FullName 'product')) ?? "Périphérique $($dir.Name)"
+            Vendor   = Read-SysFile (Join-Path $dir.FullName 'manufacturer')
+            Id       = '{0}:{1}' -f $vendorId, (Read-SysFile (Join-Path $dir.FullName 'idProduct'))
+            Speed    = $speeds[$speed] ?? $speed
+            Category = $null
+        }
+    }
+}
+
+# Appareils Bluetooth connectés.
+# Windows : Get-PnpDevice -Class Bluetooth (appareils BTHENUM présents, hors services et adaptateur).
+# Linux   : bluetoothctl devices Connected (BlueZ ≥ 5.65), limité à 2 s.
+function Get-BluetoothDevices {
+    if ($IsWindows) {
+        return Get-PnpDevice -Class Bluetooth -PresentOnly -ErrorAction SilentlyContinue |
+            Where-Object { $_.InstanceId -like 'BTHENUM\DEV_*' -or $_.InstanceId -like 'BTHLE\DEV_*' } |
+            ForEach-Object { [PSCustomObject]@{ Name = $_.FriendlyName; Address = ($_.InstanceId -replace '^.*DEV_([0-9A-F]{12}).*$', '$1') } }
+    }
+    if (-not (Get-Command bluetoothctl -ErrorAction SilentlyContinue) -or -not (Test-Path /usr/bin/timeout)) { return @() }
+    & /usr/bin/timeout 2 bluetoothctl devices Connected 2>$null | Where-Object { $_ -match '^Device ([0-9A-F:]{17}) (.+)$' } | ForEach-Object {
+        [PSCustomObject]@{ Name = $Matches[2]; Address = $Matches[1] }
+    }
+}
+
+#endregion
+
 #region GPU
 
+# Mémoire vidéo de chaque carte.
+#   Windows : registre de la classe Display (HardwareInformation.qwMemorySize, 64 bits), sinon AdapterRAM (limité à 4 GiB).
+#   Linux   : nvidia-smi (par adresse PCI) ou /sys/bus/pci/devices/<slot>/mem_info_vram_total (AMD).
 function Get-GpuCards {
     if ($IsWindows) {
+        $vram = @{}
+        $class = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}'
+        foreach ($key in Get-ChildItem -Path $class -ErrorAction SilentlyContinue | Where-Object PSChildName -Match '^\d{4}$') {
+            $props = Get-ItemProperty -Path $key.PSPath -ErrorAction SilentlyContinue
+            $size = $props.'HardwareInformation.qwMemorySize'
+            if ($props.DriverDesc -and $size) { $vram[$props.DriverDesc] = [double]$size }
+        }
         return Get-CimInstance -ClassName Win32_VideoController | ForEach-Object {
             [PSCustomObject]@{
                 Name    = $_.Name
                 Vendor  = $_.AdapterCompatibility
                 Driver  = $_.InfFilename
                 Version = $_.DriverVersion
+                Memory  = $vram[$_.Name] ?? $(if ($_.AdapterRAM -gt 0) { [double]$_.AdapterRAM } else { $null })
                 Slot    = $_.PNPDeviceID -replace '\\.*$', ''
             }
         }
     }
+
+    $nvidia = @{}
+    if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
+        # « 00000000:01:00.0, 10240 » → slot PCI 0000:01:00.0, MiB
+        foreach ($line in & nvidia-smi --query-gpu=pci.bus_id,memory.total --format=csv,noheader,nounits 2>$null) {
+            $f = $line -split ',\s*'
+            if ($f.Count -ge 2) { $nvidia[($f[0] -replace '^0000', '').ToLowerInvariant()] = [double]$f[1] * 1MB }
+        }
+    }
     Get-LinuxPciDevices | Where-Object { $_.Class -like '03*' } | ForEach-Object {
-        [PSCustomObject]@{ Name = $_.Name; Vendor = $_.Vendor; Driver = $_.Driver; Version = $_.Version; Slot = $_.Slot }
+        $amd = Read-SysFile "/sys/bus/pci/devices/$($_.Slot)/mem_info_vram_total"
+        [PSCustomObject]@{
+            Name = $_.Name; Vendor = $_.Vendor; Driver = $_.Driver; Version = $_.Version; Slot = $_.Slot
+            Memory = $nvidia[$_.Slot.ToLowerInvariant()] ?? $(if ($amd) { [double]$amd } else { $null })
+        }
     }
 }
 
@@ -357,7 +604,11 @@ function Get-DeviceProblems {
 
 function Get-ModuleData {
     $sections = [System.Collections.Generic.List[object]]::new()
+    $findings = [System.Collections.Generic.List[object]]::new()
     $errors = [ordered]@{}
+    function Add-Finding([string]$Severity, [string]$Code, [string]$Message, [string]$Recommendation) {
+        $findings.Add([PSCustomObject]@{ Severity = $Severity; Code = $Code; Message = $Message; Recommendation = $Recommendation })
+    }
 
     # Chaque bloc est indépendant ; il renvoie sa valeur (une affectation dans le bloc ne remonterait pas).
     function Invoke-Block([string]$Name, [scriptblock]$Block) {
@@ -392,6 +643,10 @@ function Get-ModuleData {
                     Detail = ('{0} libres sur {1}' -f (Format-GiB ($live.VramTotal - $live.VramUsed)), (Format-GiB $live.VramTotal))
                 })
         }
+        if ($null -ne $live.Temperature -and $live.Temperature -ge $script:TempWarning) {
+            Add-Finding $(if ($live.Temperature -ge $script:TempCritical) { 'critical' } else { 'warning' }) 'HW-GPU-HOT' `
+                ('Carte graphique à {0}' -f (Format-Unit $live.Temperature '°C' '0')) 'Vérifier la ventilation du boîtier et de la carte graphique.'
+        }
         if ($null -ne $live.Temperature) {
             $sections.Add([PSCustomObject]@{
                     Title = 'Température du GPU'; Type = 'Metric'; Icon = 'temperature'; Value = $live.Temperature; Unit = '°C'
@@ -409,12 +664,26 @@ function Get-ModuleData {
             $sections.Add([PSCustomObject]@{ Title = 'BIOS / UEFI'; Type = 'KeyValue'; Icon = 'shield_checkmark'; Items = $static.Bios })
         }
 
+        # TPM (lu une fois : ne change pas pendant le fonctionnement)
+        $tpm = Invoke-Block 'TPM' { Get-Cached 'tpm' 3600 { Get-TpmInfo } }
+        if ($tpm) {
+            $sections.Add([PSCustomObject]@{ Title = 'TPM'; Type = 'KeyValue'; Icon = 'lock_closed'; Items = $tpm.Items })
+            if (-not $tpm.Present) {
+                Add-Finding 'info' 'HW-TPM-MISSING' 'Aucun TPM détecté' 'Le TPM 2.0 est requis par Windows 11 et le chiffrement BitLocker : vérifier s''il est désactivé dans le BIOS (PTT / fTPM).'
+            }
+            elseif ($tpm.Major -and $tpm.Major -lt 2) {
+                Add-Finding 'info' 'HW-TPM-OLD' ('TPM {0}.x : Windows 11 exige un TPM 2.0' -f $tpm.Major) $null
+            }
+        }
+
         # Cartes graphiques
         if ($static.Gpus.Count -gt 0) {
-            $rows = foreach ($g in $static.Gpus) { , @($g.Name, $g.Vendor, $g.Driver, $g.Version, $g.Slot) }
+            $rows = foreach ($g in $static.Gpus) {
+                , @($g.Name, $g.Vendor, $(if ($g.Memory) { [Math]::Round($g.Memory / 1GB, 1) } else { $null }), $g.Driver, $g.Version, $g.Slot)
+            }
             $sections.Add([PSCustomObject]@{
                     Title = 'Cartes graphiques'; Type = 'Table'; Icon = 'desktop'
-                    Columns = @('Carte', 'Fabricant', 'Pilote', 'Version du pilote', 'Emplacement')
+                    Columns = @('Carte', 'Fabricant', 'Mémoire (GiB)', 'Pilote', 'Version du pilote', 'Emplacement')
                     Rows = @($rows)
                 })
         }
@@ -450,26 +719,111 @@ function Get-ModuleData {
         }
     }
 
-    # Pilotes des périphériques (Linux : relus à chaque fois, c'est rapide ; Windows : lus une fois)
+    # Écrans, audio, USB, Bluetooth : changent quand on branche quelque chose, relus toutes les 10 à 30 s
+    Invoke-Block 'Écrans' {
+        $displays = @(Get-Cached 'displays' 30 { Get-Displays })
+        if ($displays.Count -gt 0) {
+            $rows = foreach ($d in $displays) {
+                , @(($d.Name ?? 'Écran'), $d.Vendor, $d.Connector, $d.Mode, $d.Inches, $d.Year)
+            }
+            $sections.Add([PSCustomObject]@{
+                    Title = 'Écrans'; Type = 'Table'; Icon = 'desktop'
+                    Columns = @('Écran', 'Fabricant', 'Connexion', $(if ($IsWindows) { 'Mode' } else { 'Définition native' }), 'Diagonale (pouces)', 'Année')
+                    Rows = @($rows)
+                })
+        }
+        if ($IsWindows) {
+            $modes = @(Get-Cached 'modes' 30 { Get-WindowsDisplayModes })
+            if ($modes.Count -gt 0) {
+                $sections.Add([PSCustomObject]@{ Title = 'Affichage'; Type = 'KeyValue'; Icon = 'desktop'; Items = [ordered]@{ 'Mode actuel' = $modes -join ' · ' } })
+            }
+        }
+    }
+
+    Invoke-Block 'Audio' {
+        $audio = @(Get-Cached 'audio' 10 { Get-AudioDevices })
+        if ($audio.Count -gt 0) {
+            $rows = foreach ($a in $audio | Sort-Object { -not $_.Default }, Kind, Name) {
+                , @($a.Name, $a.Kind, $(if ($a.Default) { 'Oui' } elseif ($null -ne $a.Default) { 'Non' } else { $null }), $a.State)
+            }
+            $sections.Add([PSCustomObject]@{
+                    Title = 'Audio'; Type = 'Table'; Icon = 'pulse'
+                    Columns = @('Périphérique', 'Type', 'Par défaut', 'État')
+                    Rows = @($rows)
+                })
+        }
+    }
+
+    Invoke-Block 'USB' {
+        $usb = @(Get-Cached 'usb' 10 { Get-UsbDevices })
+        if ($usb.Count -gt 0) {
+            $rows = foreach ($u in $usb | Sort-Object Name) { , @($u.Name, $u.Vendor, $u.Id, $(if ($IsWindows) { $u.Category } else { $u.Speed })) }
+            $sections.Add([PSCustomObject]@{
+                    Title = 'Périphériques USB'; Type = 'Table'; Icon = 'plug_connected'
+                    Columns = @('Périphérique', 'Fabricant', 'ID (VID:PID)', $(if ($IsWindows) { 'Classe' } else { 'Vitesse' }))
+                    Rows = @($rows)
+                })
+        }
+    }
+
+    Invoke-Block 'Bluetooth' {
+        $bluetooth = @(Get-Cached 'bluetooth' 10 { Get-BluetoothDevices })
+        if ($bluetooth.Count -gt 0) {
+            $rows = foreach ($b in $bluetooth) { , @($b.Name, $b.Address) }
+            $sections.Add([PSCustomObject]@{
+                    Title = 'Bluetooth connecté'; Type = 'Table'; Icon = 'link'
+                    Columns = @('Appareil', 'Adresse'); Rows = @($rows)
+                })
+        }
+    }
+
+    # Pilotes des périphériques (Linux : relus toutes les 30 s ; Windows : lus une fois, requête lente)
     Invoke-Block 'Pilotes' {
         $drivers = if ($IsWindows) { $static.Drivers } else {
             Get-Cached 'pci' 30 { Get-LinuxPciDevices } | Where-Object { $_.Driver -and $_.Class.Substring(0, 2) -ne '06' } |
                 Sort-Object Category, Name |
-                ForEach-Object { [PSCustomObject]@{ Name = $_.Name; Category = $_.Category; Driver = $_.Driver; Version = $_.Version } }
+                ForEach-Object {
+                    $origin = Get-ModuleOrigin $_.Taint
+                    [PSCustomObject]@{ Name = $_.Name; Category = $_.Category; Driver = $_.Driver; Version = $_.Version; Date = $null; Signed = $origin.Signed; Origin = $origin.Origin }
+                }
         }
         if ($drivers) {
-            $rows = foreach ($d in $drivers) { , @($d.Name, $d.Category, $d.Driver, $d.Version) }
+            $rows = foreach ($d in $drivers) {
+                $row = @($d.Name, $d.Category, $d.Driver, $d.Version)
+                $row += if ($IsWindows) { $(if ($d.Date) { $d.Date.ToString('dd/MM/yyyy', $script:Fr) } else { $null }) } else { $d.Origin }
+                $row += if ($d.Signed) { 'Oui' } else { 'Non' }
+                , $row
+            }
             $sections.Add([PSCustomObject]@{
                     Title = 'Pilotes des périphériques'; Type = 'Table'; Icon = 'settings'
-                    Columns = @('Périphérique', 'Catégorie', 'Pilote', 'Version')
+                    Columns = @('Périphérique', 'Catégorie', $(if ($IsWindows) { 'Éditeur' } else { 'Pilote' }), 'Version', $(if ($IsWindows) { 'Date' } else { 'Origine' }), 'Signé')
                     Rows = @($rows)
                 })
+
+            # Linux : un module propriétaire non signé (NVIDIA) est courant sans Secure Boot → simple information.
+            foreach ($d in $drivers | Where-Object { -not $_.Signed }) {
+                Add-Finding $(if ($IsWindows) { 'warning' } else { 'info' }) 'HW-DRIVER-UNSIGNED' ('Pilote non signé : {0} ({1})' -f $d.Driver, $d.Name) `
+                    $(if ($IsWindows) { 'Mettre à jour le pilote depuis le site du fabricant ; un pilote non signé peut être bloqué ou malveillant.' }
+                      else { 'Module hors noyau non signé : il ne se chargera pas avec Secure Boot actif sans clé MOK enregistrée.' })
+            }
+            if ($IsWindows) {
+                $limit = (Get-Date).AddYears(-5)
+                foreach ($d in $drivers | Where-Object { $_.Date -and $_.Date -lt $limit -and $_.Category -in 'DISPLAY', 'NET', 'MEDIA', 'BLUETOOTH' }) {
+                    Add-Finding 'info' 'HW-DRIVER-OLD' ('Pilote de plus de 5 ans : {0} ({1})' -f $d.Name, $d.Date.ToString('dd/MM/yyyy', $script:Fr)) `
+                        'Vérifier s''il existe une version plus récente chez le fabricant.'
+                }
+            }
         }
     }
 
     # Périphériques en erreur
     Invoke-Block 'Périphériques en erreur' {
         $problems = @(Get-Cached 'problems' 30 { Get-DeviceProblems })
+        foreach ($p in $problems) {
+            Add-Finding $(if ($IsWindows) { 'warning' } else { 'info' }) 'HW-DEVICE-ERROR' ('{0} : {1}' -f $p.Name, $p.Problem) `
+                $(if ($IsWindows) { 'Ouvrir le Gestionnaire de périphériques : réinstaller ou mettre à jour le pilote.' }
+                  else { 'Installer le pilote (paquet du fabricant ou firmware) si ce périphérique doit être utilisé.' })
+        }
         if ($problems.Count -gt 0) {
             $rows = foreach ($p in $problems) { , @($p.Name, $p.Category, $p.Problem) }
             $sections.Add([PSCustomObject]@{
@@ -501,7 +855,7 @@ function Get-ModuleData {
         if ($ram) { $subtitle += '{0} {1}' -f (Format-GiB (($ram | Measure-Object -Property Size -Sum).Sum)), (($ram.Type | Where-Object { $_ } | Select-Object -First 1)) }
     }
 
-    [PSCustomObject]@{ Subtitle = ($subtitle -join ' · ').Trim(); Sections = $sections.ToArray() }
+    [PSCustomObject]@{ Subtitle = ($subtitle -join ' · ').Trim(); Sections = $sections.ToArray(); Findings = $findings.ToArray() }
 }
 
 Export-ModuleMember -Function Get-ModuleData
