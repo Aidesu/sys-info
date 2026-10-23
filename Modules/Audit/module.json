@@ -1,0 +1,47 @@
+{
+  "id": "audit",
+  "title": "Audit",
+  "icon": "timer",
+  "order": 200,
+  "refreshSeconds": 30,
+  "platforms": ["windows", "linux"],
+  "requiresAdmin": false,
+  "description": "Audit trail of SysInfo over 30 days: number of calls from the window and from AI agents (MCP), actions run, previews, declined, blocked and failed actions; the latest actions with origin (window or MCP client), tool, level, confirmation, result, parameters, changes (before / after) and whether they can be undone; the most called tools and the latest errors. Findings flag actions run by an AI agent in the last 24 hours and repeated declined requests. The log is the one of the account running SysInfo.",
+  "functions": [
+    {
+      "name": "get_log",
+      "title": "Journal",
+      "command": "Get-SIAuditLog",
+      "level": "L",
+      "description": "Entries of the SysInfo audit log, newest first, filtered: id, time, origin (window or MCP client), account, tool, level, preview or not, confirmation, result, duration, parameters, finding codes, changes, restore point and error. Use the id with audit_undo.",
+      "parameters": [
+        { "name": "sinceHours", "label": "Depuis (heures)", "type": "integer", "description": "Time window, in hours before now.", "minimum": 1, "maximum": 8760, "default": 168 },
+        { "name": "origin", "label": "Origine", "type": "string", "description": "all, ui (SysInfo window) or mcp (AI agents).", "enum": ["all", "ui", "mcp"], "default": "all" },
+        { "name": "kind", "label": "Type", "type": "string", "description": "all, actions (levels A and C) or reads.", "enum": ["all", "actions", "reads"], "default": "all" },
+        { "name": "tool", "label": "Outil", "type": "string", "description": "Keep only tools whose name contains this text." },
+        { "name": "status", "label": "Résultat", "type": "string", "description": "Keep only this result.", "enum": ["all", "ok", "warning", "critical", "error", "blocked", "declined", "cancelled", "running"], "default": "all" },
+        { "name": "top", "label": "Nombre max.", "type": "integer", "description": "Maximum number of entries returned.", "minimum": 1, "maximum": 1000, "default": 100 }
+      ]
+    },
+    {
+      "name": "undo",
+      "title": "Annuler une action",
+      "command": "Undo-SIAction",
+      "level": "A",
+      "description": "Undoes an action of the audit log (last 90 days) by running its recorded undo, a reverse action of the same module: start a stopped service, re-enable a startup item, restore a process priority… The preview is the reverse action's preview. Blocked when the entry changed nothing, has no undo, was already undone, or when the undo is itself a critical action (then call that tool directly).",
+      "parameters": [
+        { "name": "id", "label": "Id de l'entrée", "type": "string", "description": "Id of the audit entry (from audit_get_log or the Actions card).", "required": true }
+      ]
+    },
+    {
+      "name": "export_log",
+      "title": "Exporter le journal",
+      "command": "Export-SIAuditLog",
+      "level": "A",
+      "description": "Writes the audit log of a period to a new JSON file in Documents/SysInfo/Exports (never overwriting). Returns the file path, not its content.",
+      "parameters": [
+        { "name": "sinceHours", "label": "Depuis (heures)", "type": "integer", "description": "Time window, in hours before now.", "minimum": 1, "maximum": 8760, "default": 720 }
+      ]
+    }
+  ]
+}

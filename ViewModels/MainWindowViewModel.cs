@@ -24,15 +24,21 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             Console.Error.WriteLine($"[modules] {error}");
 
         Tabs = result.Modules.Select(m => new ModuleTabViewModel(m)).ToList();
-        Settings = new SettingsViewModel(settings, Tabs.Count, result.Errors);
+        Settings = new SettingsViewModel(settings, Tabs.Count, result.Errors, result.Modules);
         Settings.PropertyChanged += OnSettingsChanged;
-        FooterPages = [Settings];
+        // Activité, above Paramètres: what runs now, and the history (audit log).
+        Activity = new Activity.ActivityViewModel(result.Modules);
+        SysInfo.ViewModels.Activity.ActivityViewModel.Current = Activity;
+        FooterPages = [Activity, Settings];
 
         SelectedTab = Tabs.FirstOrDefault();
 
         // Every module starts collecting now, not when its page is first opened.
         foreach (var tab in Tabs)
+        {
+            tab.EcoMode = settings.EcoRefresh;
             tab.Start();
+        }
         if (SelectedTab is null)
             SelectedFooterPage = Settings;
     }
@@ -43,6 +49,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public IReadOnlyList<NavPageViewModel> FooterPages { get; }
 
     public SettingsViewModel Settings { get; }
+
+    public Activity.ActivityViewModel Activity { get; }
 
     public bool HasTabs => Tabs.Count > 0;
 
@@ -103,6 +111,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void OnSettingsChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(SettingsViewModel.EcoRefresh))
+        {
+            foreach (var tab in Tabs)
+                tab.EcoMode = Settings.EcoRefresh;
+        }
         if (e.PropertyName == nameof(SettingsViewModel.PauseWhenMinimized))
             UpdatePause();
     }
@@ -143,5 +156,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         foreach (var tab in Tabs)
             tab.Dispose();
+        Activity.Dispose();
     }
 }

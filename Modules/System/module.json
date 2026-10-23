@@ -60,7 +60,8 @@
           "label": "PID racine",
           "type": "integer",
           "description": "PID of the process whose subtree is returned; omit for the whole tree.",
-          "minimum": 1
+          "minimum": 0,
+          "maximum": 2147483647
         },
         {
           "name": "maxDepth",
@@ -79,6 +80,61 @@
           "minimum": 1,
           "maximum": 2000,
           "default": 300
+        }
+      ]
+    },
+    {
+      "name": "stop_process",
+      "title": "Arrêter un processus",
+      "command": "Stop-SIProcess",
+      "level": "A",
+      "description": "Stops one process of this computer by PID. Without force, asks it to close (Windows: closes its main window, else terminates it; Linux: SIGTERM) and waits 5 s; with force, kills it at once (unsaved data is lost). The preview shows the process (owner, path, command line, services or systemd unit it hosts, child processes). Refused for essential system or session processes, kernel threads, SysInfo itself, and other accounts' processes without administrator rights. Find the PID with system_get_processes.",
+      "parameters": [
+        {
+          "name": "processId",
+          "label": "PID",
+          "type": "integer",
+          "description": "Process id (PID).",
+          "minimum": 1,
+          "required": true
+        },
+        {
+          "name": "force",
+          "label": "Forcer",
+          "type": "boolean",
+          "description": "Kill at once instead of asking the program to close.",
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "set_priority",
+      "title": "Priorité d'un processus",
+      "command": "Set-SIProcessPriority",
+      "level": "A",
+      "description": "Changes the CPU priority of one process until it exits (Windows priority class; Linux nice value: idle 19, below_normal 10, normal 0, above_normal -5, high -10). Real-time is never offered. On Linux, raising a priority (lower nice) needs root. The preview shows the current and new priority.",
+      "parameters": [
+        {
+          "name": "processId",
+          "label": "PID",
+          "type": "integer",
+          "description": "Process id (PID).",
+          "minimum": 1,
+          "required": true
+        },
+        {
+          "name": "priority",
+          "label": "Priorité",
+          "type": "string",
+          "description": "New priority.",
+          "enum": [
+            "idle",
+            "below_normal",
+            "normal",
+            "above_normal",
+            "high"
+          ],
+          "required": true
         }
       ]
     }

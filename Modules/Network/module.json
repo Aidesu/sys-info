@@ -129,14 +129,14 @@
       "title": "Adresse IP publique",
       "command": "Get-SIPublicIp",
       "level": "L",
-      "description": "Public IPv4 and IPv6 addresses of this computer as seen from the Internet, with their reverse DNS name. Calls the external service api.ipify.org.",
-      "parameters": []
+      "description": "Public IPv4 and IPv6 addresses of this computer as seen from the Internet, with their reverse DNS name. Calls the external service api.ipify.org."
     },
     {
       "name": "discover_lan",
       "title": "Découverte du réseau local",
       "command": "Get-SILanDevices",
       "level": "L",
+      "long": true,
       "dependencies": [
         "avahi-browse"
       ],
@@ -193,6 +193,61 @@
           "label": "Serveur DNS",
           "type": "string",
           "description": "DNS server to ask (IP or name); omit for the system resolver."
+        }
+      ]
+    },
+    {
+      "name": "flush_dns",
+      "title": "Vider le cache DNS",
+      "command": "Clear-SIDnsCache",
+      "level": "A",
+      "description": "Flushes the local DNS cache of this computer, so that names are resolved again by the DNS server (useful after a site or DNS server changed address, or a stale or poisoned answer). Windows: ipconfig /flushdns; Linux: systemd-resolved (resolvectl flush-caches) or nscd. The preview shows the cache in use and a resolution test; blocked when there is no local cache."
+    },
+    {
+      "name": "renew_dhcp",
+      "title": "Renouveler le bail DHCP",
+      "command": "Update-SIDhcpLease",
+      "level": "A",
+      "description": "Asks the DHCP server again for an IPv4 address on one interface (default: the main connection), to recover from a wrong or expired address. The connection is cut for a few seconds. Windows: ipconfig /renew (needs administrator rights); Linux: NetworkManager reactivates the connection (nmcli connection up). The preview shows the interface, current address, DHCP server and lease end; blocked for a static address or an interface NetworkManager does not manage. Returns the address and lease before and after.",
+      "parameters": [
+        {
+          "name": "interface",
+          "label": "Interface",
+          "type": "string",
+          "description": "Interface name (eno1, Wi-Fi, Ethernet…); omit for the main connection."
+        }
+      ]
+    },
+    {
+      "name": "reset_stack",
+      "title": "Réinitialiser la pile réseau",
+      "command": "Reset-SINetworkStack",
+      "level": "C",
+      "platforms": [
+        "windows"
+      ],
+      "description": "Resets Winsock and the TCP/IP stack (netsh winsock reset, netsh int ip reset) when the connection stays broken although the configuration looks right (corrupted Winsock catalog, leftover VPN or filter). Static IP settings return to defaults; a restart is required."
+    },
+    {
+      "name": "set_adapter",
+      "title": "Désactiver / réactiver une carte réseau",
+      "command": "Set-SINetworkAdapter",
+      "level": "C",
+      "description": "Disables or re-enables one network adapter. Windows: Disable-NetAdapter / Enable-NetAdapter. Linux: nmcli device disconnect / connect (NetworkManager). Disabling the adapter of the main connection cuts the network. Reversible with the same action.",
+      "parameters": [
+        {
+          "name": "interface",
+          "label": "Interface",
+          "type": "string",
+          "description": "Adapter name (Windows: Ethernet, Wi-Fi…; Linux: eno1, wlp2s0…).",
+          "required": true
+        },
+        {
+          "name": "enabled",
+          "label": "Activée",
+          "type": "boolean",
+          "description": "false to disable, true to re-enable.",
+          "required": true
         }
       ]
     }

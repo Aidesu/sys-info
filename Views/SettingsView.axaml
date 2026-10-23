@@ -98,6 +98,16 @@
                         <TextBlock Classes="CardTitle" Text="Rafraîchissement" />
                         <Grid Classes="SettingRow" ColumnDefinitions="*,Auto" Margin="0,12,0,0">
                             <StackPanel VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Classes="Body" Text="Économiser les ressources" />
+                                <TextBlock Classes="Caption" TextWrapping="Wrap"
+                                           Text="Les pages non affichées se rafraîchissent moins souvent (5 fois moins, une minute au plus) : SysInfo pèse moins sur les mesures. La page ouverte reste en temps réel." />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" VerticalAlignment="Center" Margin="16,0,0,0"
+                                          IsChecked="{Binding EcoRefresh}"
+                                          AutomationProperties.Name="Économiser les ressources" />
+                        </Grid>
+                        <Grid Classes="SettingRow" ColumnDefinitions="*,Auto" Margin="0,12,0,0">
+                            <StackPanel VerticalAlignment="Center" Spacing="2">
                                 <TextBlock Classes="Body" Text="Pause quand la fenêtre est réduite" />
                                 <TextBlock Classes="Caption" Text="Les modules PowerShell ne sont plus appelés." />
                             </StackPanel>
@@ -105,6 +115,60 @@
                                           IsChecked="{Binding PauseWhenMinimized}"
                                           AutomationProperties.Name="Pause quand la fenêtre est réduite" />
                         </Grid>
+                    </StackPanel>
+                </Border>
+
+                <!-- Actions et audit -->
+                <Border Classes="Card">
+                    <StackPanel>
+                        <TextBlock Classes="CardTitle" Text="Actions et audit" />
+                        <Grid Classes="SettingRow" ColumnDefinitions="*,Auto" Margin="0,12,0,0">
+                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Classes="Body" Text="Actions demandées par les agents IA (MCP)" />
+                                <TextBlock Classes="Caption" TextWrapping="Wrap"
+                                           Text="Chaque action est confirmée dans une fenêtre SysInfo, avec son aperçu, puis journalisée. Pris en compte au prochain lancement du serveur MCP." />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" VerticalAlignment="Center" Margin="16,0,0,0"
+                                          IsChecked="{Binding McpActions}"
+                                          AutomationProperties.Name="Actions demandées par les agents IA" />
+                        </Grid>
+                        <Grid Classes="SettingRow" ColumnDefinitions="*,Auto" Margin="0,12,0,0">
+                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Classes="Body" Text="Actions critiques demandées par les agents IA" />
+                                <TextBlock Classes="Caption" TextWrapping="Wrap"
+                                           Text="Pare-feu, désinstallation, réparations… Exigent aussi SysInfo --mcp en administrateur ; un point de restauration est créé avant." />
+                            </StackPanel>
+                            <ToggleSwitch Grid.Column="1" VerticalAlignment="Center" Margin="16,0,0,0"
+                                          IsChecked="{Binding McpCriticalActions}"
+                                          AutomationProperties.Name="Actions critiques demandées par les agents IA" />
+                        </Grid>
+                        <Expander Header="Liste blanche des actions MCP" Margin="0,12,0,0" IsVisible="{Binding HasActionTools}"
+                                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                            <ItemsControl ItemsSource="{Binding ActionTools}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Spacing="{StaticResource Space4}" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:McpToolChoice">
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                            <CheckBox IsChecked="{Binding Enabled}" AutomationProperties.Name="{Binding Label}" />
+                                            <TextBlock Grid.Column="1" Classes="Body" Text="{Binding Label}" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="2" Classes="Caption" VerticalAlignment="Center" Margin="12,0,0,0">
+                                                <Run Text="{Binding Name}" /><Run Text=" · " /><Run Text="{Binding Level}" />
+                                            </TextBlock>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Expander>
+                        <StackPanel Spacing="2" Margin="0,12,0,0">
+                            <TextBlock Classes="Body" Text="Journal d'audit" />
+                            <TextBlock Classes="Caption" Text="{Binding AuditRetentionText}" />
+                            <SelectableTextBlock Classes="Value" Foreground="{DynamicResource TextSecondary}"
+                                                 Text="{Binding AuditDirectory}" TextWrapping="Wrap" />
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 

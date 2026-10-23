@@ -1,0 +1,63 @@
+{
+  "id": "events",
+  "title": "Événements",
+  "icon": "warning",
+  "order": 40,
+  "refreshSeconds": 30,
+  "platforms": ["windows", "linux"],
+  "requiresAdmin": false,
+  "description": "System events of this computer over the last 7 days: counts of critical errors, errors, unexpected shutdowns, blue screens / kernel panics, application crashes and hangs, hardware and memory errors (WHEA, machine checks, out-of-memory kills) and failed updates; the reliability index (Windows); then one table per kind (unexpected shutdowns, blue screens with bug check code and probable cause, application crashes with faulting module, hardware errors, failed updates), the most frequent recurring errors grouped by source, and the latest errors. Findings flag blue screens, kernel panics, unexpected shutdowns, repeated application crashes, hardware errors, out-of-memory kills, failed updates and a low reliability index.",
+  "functions": [
+    {
+      "name": "query",
+      "title": "Recherche dans les journaux",
+      "command": "Search-SIEvents",
+      "level": "L",
+      "description": "Searches the event logs of this computer with filters: log (Windows log name such as System or Application; on Linux 'system' for the whole journal or 'kernel'), source (Windows provider name; Linux syslog identifier or systemd unit), event ID (Windows), minimum level, time window and text. Returns the matching events, newest first, with time, level, source, ID and message.",
+      "parameters": [
+        { "name": "log", "label": "Journal", "type": "string", "description": "Windows: log name (System, Application, Security, Setup or any event log). Linux: 'system' (whole journal) or 'kernel'.", "default": "System" },
+        { "name": "source", "label": "Source", "type": "string", "description": "Windows: provider name (ex. Microsoft-Windows-Kernel-Power). Linux: syslog identifier (ex. sshd) or systemd unit (ex. NetworkManager.service)." },
+        { "name": "eventId", "label": "ID d'événement", "type": "integer", "description": "Windows event ID (ex. 41, 1000, 7031). Ignored on Linux.", "minimum": 0, "maximum": 65535 },
+        { "name": "level", "label": "Niveau minimal", "type": "string", "description": "Minimum level: critical, error, warning or info.", "enum": ["critical", "error", "warning", "info"], "default": "error" },
+        { "name": "sinceHours", "label": "Depuis (heures)", "type": "integer", "description": "Time window, in hours before now.", "minimum": 1, "maximum": 2160, "default": 24 },
+        { "name": "contains", "label": "Texte", "type": "string", "description": "Keep only events whose message contains this text (case-insensitive)." },
+        { "name": "top", "label": "Nombre max.", "type": "integer", "description": "Maximum number of events returned.", "minimum": 1, "maximum": 500, "default": 50 }
+      ]
+    },
+    {
+      "name": "get_timeline",
+      "title": "Chronologie",
+      "command": "Get-SITimeline",
+      "level": "L",
+      "description": "Correlated timeline of this computer over the last days: boots and shutdowns (clean or unexpected), blue screens / kernel panics, application crashes, hardware errors, software and update installs, and critical errors, merged and sorted by time. Use it to see what happened just before a problem (ex. a driver installed before the first blue screen).",
+      "parameters": [
+        { "name": "days", "label": "Jours", "type": "integer", "description": "Number of days covered.", "minimum": 1, "maximum": 90, "default": 7 },
+        { "name": "top", "label": "Nombre max.", "type": "integer", "description": "Maximum number of entries returned.", "minimum": 1, "maximum": 1000, "default": 200 }
+      ]
+    },
+    {
+      "name": "get_reliability",
+      "title": "Historique de fiabilité",
+      "command": "Get-SIReliability",
+      "level": "L",
+      "platforms": ["windows"],
+      "description": "Windows reliability history: the stability index (1 to 10) day by day and the reliability records (application failures, Windows failures, miscellaneous failures, installs) over the last days.",
+      "parameters": [
+        { "name": "days", "label": "Jours", "type": "integer", "description": "Number of days covered.", "minimum": 1, "maximum": 90, "default": 30 }
+      ]
+    },
+    {
+      "name": "export_log",
+      "title": "Exporter un journal",
+      "command": "Export-SIEventLog",
+      "level": "A",
+      "description": "Exports an event log of this computer over a time window to a new file in Documents/SysInfo/Exports (never elsewhere, never overwriting), to archive it or send it to a technician. Windows: wevtutil (.evtx file, opens in Event Viewer; the Security log needs administrator rights). Linux: journalctl, whole journal or kernel, as text (ISO timestamps) or JSON. The preview shows the number of events and the file name; returns the file path and size. The file content is not returned.",
+      "parameters": [
+        { "name": "log", "label": "Journal", "type": "string", "description": "Windows: log name (System, Application, Setup, Security…). Linux: 'system' (whole journal) or 'kernel'. Default: System on Windows, system on Linux." },
+        { "name": "sinceHours", "label": "Depuis (heures)", "type": "integer", "description": "Time window, in hours before now.", "minimum": 1, "maximum": 2160, "default": 24 },
+        { "name": "level", "label": "Niveau minimal", "type": "string", "description": "Keep all events, or only critical, error or warning and more severe.", "enum": ["all", "critical", "error", "warning"], "default": "all" },
+        { "name": "format", "label": "Format", "type": "string", "description": "Linux: text or json. Windows always writes .evtx.", "enum": ["text", "json"], "default": "text" }
+      ]
+    }
+  ]
+}

@@ -7,10 +7,14 @@
 
 # Partie 1 — Notes de travail
 
-## 1. État au 2026-10-23 (fin de S1)
+## 1. État au 2026-10-23 (fin de S4b)
 
-4 modules sur 21 existent ; leur fiche du catalogue est couverte en lecture (niveau L), hors restes listés au §2.
-Le MCP expose 15 outils : `get_system`, `get_hardware`, `get_network`, `get_storage` et 11 fonctions ciblées.
+10 modules sur 21 existent : les 8 premiers (lecture, actions A et C) plus Maintenance (9) et Audit & Traçabilité (21).
+MCP par défaut (actions critiques désactivées) : 55 outils sous Linux, 58 sous Windows ; avec les actions critiques : 64 / 72 (10 `get_<id>`, `job_status`, `job_cancel`, puis fonctions L, A et C de chaque OS).
+
+Actions A : `system_stop_process`, `system_set_priority`, `network_flush_dns`, `network_renew_dhcp`, `events_export_log`, `services_control`, `security_start_scan`, `security_update_signatures`, `software_set_startup`, `maintenance_cleanup`, `maintenance_create_restore_point`, `maintenance_optimize_volume`, `maintenance_reset_print_queue`, `maintenance_rebuild_icon_cache` (Windows), `audit_undo`, `audit_export_log`.
+Actions C : `hardware_set_device`, `hardware_reinstall_driver`, `network_reset_stack` (Windows), `network_set_adapter`, `services_set_start_type`, `security_set_firewall`, `software_install_updates`, `software_uninstall`, `maintenance_repair_system_files`, `maintenance_repair_windows_image`, `maintenance_schedule_disk_repair`, `maintenance_repair_windows_update`, `maintenance_repair_wmi` (Windows pour ces quatre), `maintenance_schedule_restart`.
+Tâches longues : `security_start_scan`, `security_update_signatures`, `storage_analyze_space`, `network_discover_lan`, `security_find_special_files`, `software_get_pending_updates`, `software_install_updates`, `software_uninstall`, `maintenance_verify_system_files`, `maintenance_repair_system_files`, `maintenance_check_windows_image`, `maintenance_repair_windows_image`, `maintenance_check_disk`.
 
 | # | Module | Vue d'ensemble (onglet, `get_<id>`) | Fonctions ciblées (carte « Outils », MCP) |
 |---|---|---|---|
@@ -18,15 +22,29 @@ Le MCP expose 15 outils : `get_system`, `get_hardware`, `get_network`, `get_stor
 | 2 | Matériel | GPU en direct ; carte mère (n° de série si lisible) ; BIOS/UEFI, Secure Boot ; TPM ; cartes graphiques (VRAM) ; écrans (EDID : nom, connectique, définition, diagonale, année) ; audio (sorties, entrées, par défaut) ; USB ; Bluetooth connecté ; RAM et barrettes ; pilotes (date, éditeur ou origine, signé) ; périphériques en erreur | — |
 | 3 | Réseau | débit, latence, perte ; connexion principale (Wi-Fi : bande, canal, sécurité, débit radio) ; DNS (suffixes, test de résolution, cache Windows) ; DHCP ; interfaces ; réseaux Wi-Fi visibles ; voisins ARP ; routes ; ports ; connexions TCP ; VPN ; partages et lecteurs réseau ; proxy et hosts ; traceroute 1.1.1.1 | `network_ping`, `network_traceroute`, `network_test_port`, `network_test_mtu`, `network_get_public_ip`, `network_discover_lan` (balayage /24, ARP, DNS, mDNS), `network_resolve_dns` |
 | 4 | Stockage | remplissage ; activité ; disques (table GPT/MBR, n° de série, SMART) ; SMART détaillé ; partitions (alignement) ; inodes ; pools, RAID, Btrfs, LVM, ZFS ; TRIM ; volumes « dirty » (admin) ; erreurs | `storage_analyze_space` (plus gros dossiers et fichiers, classe C# compilée au premier appel), `storage_get_reclaimable_space` (estimation par catégorie, rien n'est supprimé) |
-| 5–21 | autres | à faire | — |
+| 5 | Événements | résumé 7 jours (erreurs, arrêts inattendus, écrans bleus / kernel panics, plantages, erreurs matérielles, OOM, échecs de MAJ, indice de fiabilité Windows) ; tables par type (écran bleu : code, nom, cause probable) ; erreurs les plus fréquentes (regroupées) ; dernières erreurs | `events_query` (journal, source, ID, niveau, période, texte), `events_get_timeline` (démarrages, arrêts, plantages, installations, erreurs critiques ; répétitions regroupées), `events_get_reliability` (Windows) |
+| 6 | Services | résumé ; anomalies (en échec, automatiques arrêtés, redémarrages en boucle) ; plantages et échecs 7 jours ; signaux de sécurité Windows (chemin sans guillemets, binaire non signé) ; liste complète (état, démarrage, compte, PID, redémarrages, binaire) | `services_list` (état, démarrage, texte), `services_get_service` (propriétés, dépendances dans les deux sens, récupération, journal) |
+| 7 | Sécurité | score (100 − constats pondérés : 20 critique, 8 attention, 2 info) ; antivirus (Centre de sécurité, Defender : temps réel, signatures, analyses, menaces 30 j ; ClamAV) ; pare-feu (profils Windows ; zones firewalld, ufw, nftables) ; chiffrement par volume (BitLocker et types de protecteurs, LUKS) ; plateforme (Secure Boot, VBS / HVCI / Credential Guard, LSA, UAC, SmartScreen, stratégie d'exécution ; SELinux / AppArmor, lockdown) ; comptes locaux et groupes privilégiés ; sessions ; échecs de connexion 24 h ; politique de mots de passe et verrouillage ; accès distant (RDP / NLA, WinRM, SSH, Samba, xrdp, Cockpit) ; protocoles obsolètes Windows (SMBv1, TLS 1.0 / 1.1, NTLMv1) ; persistance suspecte ; autorités racines ajoutées | `security_get_logons`, `security_get_firewall_rules` (règles larges signalées), `security_find_persistence` (Run, Démarrage, Winlogon, IFEO, AppInit, tâches, WMI ; cron, unités locales, autostart, rc.local, ld.so.preload), `security_get_certificates`, `security_get_acl`, `security_find_special_files` (Linux : SUID / SGID, modifiables par tous, hors paquet) |
+| 8 | Logiciels | résumé par source ; mises à jour en attente (Linux, depuis le cache) ou dates Windows Update ; redémarrage requis ; historique récent ; programmes au démarrage (état, portée) ; runtimes ; navigateurs et navigateur par défaut ; activation Windows / Office (jamais la clé) ; fin de support ; applications installées | `software_list` (applications, Store, paquets, Flatpak, Snap ; filtre, tri), `software_get_pending_updates` (recherche Windows Update en ligne + winget ; dnf / apt / pacman, avis de sécurité dnf, Flatpak, Snap), `software_get_update_history` |
+| 9 | Maintenance | points de restauration (outil, état, liste) ; nettoyage possible par catégorie ; impression (spouleur / CUPS, travaux en attente) | `maintenance_verify_system_files`, `maintenance_check_windows_image`, `maintenance_check_disk`, `maintenance_check_wmi` ; actions ci-dessus |
+| 21 | Audit | 30 jours : appels fenêtre / MCP, actions exécutées, aperçus, refus, blocages, erreurs ; dernières actions (annulables) ; outils les plus appelés ; dernières erreurs | `audit_get_log`, `audit_undo`, `audit_export_log` |
+| 10–20 | autres | à faire | — |
 
 Constats ajoutés en S1 : `SYS-SWAP-HIGH`, `SYS-UNEXPECTED-SHUTDOWN`, `SYS-TIME-NOT-SYNCED`, `SYS-PROC-UNSIGNED` ; `HW-GPU-HOT`, `HW-TPM-MISSING`, `HW-TPM-OLD`, `HW-DRIVER-UNSIGNED`, `HW-DRIVER-OLD`, `HW-DEVICE-ERROR` ; `NET-NO-CONNECTION`, `NET-PACKET-LOSS`, `NET-LATENCY-HIGH`, `NET-WIFI-WEAK`, `NET-WIFI-INSECURE`, `NET-LINK-SLOW`, `NET-DNS-FAIL`, `NET-DNS-SLOW`, `NET-HOSTS-CUSTOM`, `NET-PROXY`, `NET-HOST-UNREACHABLE`, `NET-PING-LOSS`, `NET-TRACE-INCOMPLETE`, `NET-MTU-LOW`, `NET-DNS-NO-ANSWER` ; `STO-PART-MISALIGNED`, `STO-INODES-FULL`, `STO-RAID-DEGRADED`, `STO-TRIM-OFF`, `STO-VOLUME-DIRTY`, `STO-SCAN-PARTIAL`, `STO-RECLAIMABLE`.
 
-Fenêtre : carte « Outils » générique en bas de chaque page (formulaire depuis `module.json`, runspace séparé).
+Constats ajoutés en S2 : `EVT-UNEXPECTED-SHUTDOWN`, `EVT-BSOD`, `EVT-KERNEL-PANIC`, `EVT-KERNEL-OOPS`, `EVT-APP-CRASHES`, `EVT-HARDWARE-ERROR`, `EVT-OOM-KILL`, `EVT-UPDATE-FAILED`, `EVT-RELIABILITY-LOW`, `EVT-ERROR-FLOOD` ; `SVC-FAILED`, `SVC-AUTO-STOPPED`, `SVC-RESTART-LOOP`, `SVC-CRASHING`, `SVC-UNQUOTED-PATH`, `SVC-UNSIGNED-BINARY`.
 
-## 2. Restes des modules 1 à 4
+Constats ajoutés en S3 : `SEC-AV-OFF`, `SEC-AV-OUTDATED`, `SEC-AV-THREAT`, `SEC-AV-TAMPER-OFF`, `SEC-FIREWALL-OFF`, `SEC-FIREWALL-OPEN`, `SEC-FIREWALL-WIDE`, `SEC-FIREWALL-RULE-BROAD`, `SEC-DISK-UNENCRYPTED`, `SEC-SWAP-UNENCRYPTED`, `SEC-BITLOCKER-SUSPENDED`, `SEC-SECUREBOOT-OFF`, `SEC-VBS-OFF`, `SEC-LSA-UNPROTECTED`, `SEC-UAC-OFF`, `SEC-UAC-LOW`, `SEC-SMARTSCREEN-OFF`, `SEC-EXECPOLICY-OPEN`, `SEC-MAC-OFF`, `SEC-GUEST-ENABLED`, `SEC-PASSWORD-NOT-REQUIRED`, `SEC-ACCOUNT-INACTIVE`, `SEC-ROOT-EQUIVALENT-GROUP`, `SEC-LOGON-FAILURES`, `SEC-NO-LOCKOUT`, `SEC-PASSWORD-SHORT`, `SEC-RDP-NO-NLA`, `SEC-RDP-ON`, `SEC-SSH-ROOT-LOGIN`, `SEC-SSH-PASSWORD-AUTH`, `SEC-SMB1-ON`, `SEC-TLS-OLD`, `SEC-NTLMV1`, `SEC-PERSISTENCE-SUSPECT`, `SEC-ROOT-CERT-ADDED`, `SEC-CERT-EXPIRED`, `SEC-CERT-EXPIRING`, `SEC-ACL-WEAK`, `SEC-SUID-UNPACKAGED`, `SEC-WORLD-WRITABLE`, `SEC-SCAN-PARTIAL` ; `SW-UPDATES-PENDING`, `SW-UPDATES-OLD`, `SW-UPDATE-SEARCH-OLD`, `SW-UPDATES-PARTIAL`, `SW-UPDATE-FAILED`, `SW-REBOOT-PENDING`, `SW-STARTUP-MISSING`, `SW-NOT-ACTIVATED`, `SW-EOL`, `SW-EOL-SOON`.
 
-Actions (niveaux A / C, sprint S4) : tuer un processus / changer sa priorité ; désactiver un périphérique, réinstaller un pilote ; vider le cache DNS, renouveler le bail DHCP ; reset Winsock / pile IP, désactiver une carte.
+Constats ajoutés en S4b : `HW-DEVICE-STORAGE`, `HW-DEVICE-NETWORK`, `HW-DEVICE-DISPLAY`, `HW-DEVICE-UNDO`, `HW-DRIVER-REINSTALL`, `HW-DRIVER-SHARED`, `HW-DRIVER-MISSING` ; `NET-RESET-REBOOT`, `NET-RESET-SETTINGS`, `NET-ADAPTER-PRIMARY`, `NET-ADAPTER-UNDO` ; `SVC-START-DEPENDENTS`, `SVC-START-MASKED`, `SVC-START-NOW` ; `SEC-FIREWALL-DISABLING`, `SEC-FIREWALL-PUBLIC` ; `SW-UPDATE-REBOOT`, `SW-UPDATE-DURATION`, `SW-UNINSTALL-INTERACTIVE`, `SW-UNINSTALL-DATA`, `SW-UNINSTALL-DEPENDENTS`, `SW-UNINSTALL-INCOMPLETE` ; `MNT-NO-RESTORE-POINT`, `MNT-RESTORE-OLD`, `MNT-RESTORE-REUSED`, `MNT-CLEANUP`, `MNT-CLEANUP-PERMANENT`, `MNT-CLEANUP-REBUILT`, `MNT-CLEANUP-IN-USE`, `MNT-SYSFILES-CORRUPT`, `MNT-SYSFILES-UNKNOWN`, `MNT-SYSFILES-MODIFIED`, `MNT-SYSFILES-UNREPAIRED`, `MNT-REPAIR-REBOOT`, `MNT-REPAIR-NETWORK`, `MNT-IMAGE-CORRUPT`, `MNT-IMAGE-UNREPAIRABLE`, `MNT-IMAGE-NO-UNINSTALL`, `MNT-DISK-ERRORS`, `MNT-DISK-CHECKSUM`, `MNT-DISK-DIRTY`, `MNT-DISK-ONLINE`, `MNT-DISK-BOOT-CHECK`, `MNT-PRINT-CANCEL`, `MNT-PRINT-PARTIAL`, `MNT-PRINT-STUCK`, `MNT-EXPLORER-RESTART`, `MNT-WU-HISTORY`, `MNT-WU-REDOWNLOAD`, `MNT-WMI-INCONSISTENT`, `MNT-WMI-RESTART`, `MNT-RESTART-UNSAVED` ; `AUD-MCP-ACTIONS`, `AUD-MCP-DECLINED`, `AUD-EXPORT-PRIVATE`.
+
+Constats ajoutés en S4a (aperçus et résultats d'actions) : `SYS-STOP-SERVICE-PROCESS`, `SYS-STOP-CHILDREN`, `SYS-STOP-UNSAVED`, `SYS-STOP-IGNORED`, `SYS-PRIORITY-HIGH`, `SYS-PRIORITY-TEMPORARY` ; `NET-DNS-FLUSH-SLOWER`, `NET-DHCP-RENEW-CUT`, `NET-DHCP-NO-ADDRESS` ; `EVT-EXPORT-PARTIAL`, `EVT-EXPORT-PRIVATE` ; `SVC-CONTROL-DEPENDENTS`, `SVC-CONTROL-REMOTE-CUT`, `SVC-CONTROL-TEMPORARY`, `SVC-CONTROL-FAILED` ; `SEC-SCAN-DURATION`, `SEC-AV-ALREADY-CURRENT` (et `SEC-AV-THREAT` après une analyse) ; `SW-STARTUP-NEXT-LOGON`, `SW-STARTUP-USER-COPY`, `SW-STARTUP-UNCHANGED`.
+
+Fenêtre : carte « Outils » générique en bas de chaque page (formulaire depuis `module.json`, runspace séparé) ; actions avec « Simuler » et « Exécuter… » (fenêtre de confirmation), « Arrêter » pendant l'exécution. Paramètres › Actions et audit.
+
+## 2. Restes des modules 1 à 8
+
+Toutes les actions A et C du catalogue pour les modules 1 à 8 sont faites (§1). Effacer un journal : niveau X, jamais exposé (non proposé). Modifier BCD / GRUB : X, module 13.
 
 Limites connues, à reprendre si besoin :
 
@@ -34,6 +52,12 @@ Limites connues, à reprendre si besoin :
 - Windows : périphérique audio par défaut non exposé (API COM) ; proxy WinHTTP non lu (seul le proxy utilisateur) ; pas de mDNS dans la découverte du réseau local.
 - Linux : fréquence de rafraîchissement des écrans indisponible dans /sys (définition native seulement) ; n° de série de la carte mère et état ext4 « dirty » lisibles en root seulement ; taille du cache DNS retirée (`resolvectl statistics` prend 2 à 3 s).
 - Analyse WinSxS (DISM, admin) : avec le module Maintenance.
+- Événements : pilote fautif d'un écran bleu non identifié (il faudrait analyser le minidump) ; sous Linux, le résumé lit les 2 000 erreurs les plus récentes et le signale au-delà ; un démarrage qui s'arrête pendant le démarrage suivant peut compter comme arrêt inattendu.
+- Sécurité : beaucoup de données Windows demandent l'administrateur (BitLocker détaillé, journal Sécurité 4624 / 4625, abonnements WMI) ; sans droits, état BitLocker via le Shell et échecs de connexion non lus (signalé). Sous Linux sans root : configuration sshd, règles ufw / nftables, profils AppArmor, crontabs des autres comptes et expiration des mots de passe des autres comptes illisibles (signalé). Partages Samba et droits des partages Windows non couverts (le module Réseau liste les partages). Racines « ajoutées » sous Windows = absentes d'AuthRoot et non émises par Microsoft (heuristique). Pas de vérification sudo NOPASSWD (root requis).
+- Logiciels : sous Windows, mises à jour en attente seulement via la fonction (recherche en ligne lente) ; impact au démarrage non mesuré ; tâches planifiées au logon laissées au module Tâches planifiées ; applications du Store lues dans le registre (Get-AppxPackage n'est pas chargé par PowerShell 7). Sous Linux : mises à jour d'après le cache de dnf de l'utilisateur (date affichée) ; Snap seulement avec refresh ; date d'installation absente pour deb et pacman. Base de fin de support intégrée au module (`$script:EolRules`, au 2026-10-23), à tenir à jour ; appliquée aux runtimes et aux programmes Windows (sous Linux, la distribution suit ses paquets). Premier appel : 3 s (Sécurité), 5 à 7 s (Logiciels), puis cache.
+- Actions (S4a) : **non testées sous Windows** ; sous Linux, testées en aperçu et en exécution : arrêt et priorité d'un processus, cache DNS, export de journal, élément de démarrage (entrée XDG de test) ; en aperçu seulement : bail DHCP (couperait le réseau), services (root requis), antivirus (ClamAV absent). Confirmation testée : fenêtre affichée, refus et fenêtre fermée de force ; le clic sur « Exécuter » reste à tester à la main. Après une action, les pages gardent leur cache jusqu'au rafraîchissement suivant (runspaces séparés). Sous Linux, piloter un service système exige root (la règle polkit par défaut demande un mot de passe, impossible sans terminal).
+- Actions C et Maintenance (S4b) : **non testées sous Windows ni en root** ; sous Linux, aperçus testés pour toutes, blocages vérifiés (pilote intégré au noyau, clavier, service essentiel, paquet protégé, port couvert par une plage, droits) ; exécutées : aucune (root requis). Maintenance testée en vue d'ensemble, vérification des fichiers (rpm -Va, ~2 min), vérification Btrfs, aperçus de nettoyage. Audit testé : vue d'ensemble, journal, annulation d'un élément de démarrage. Linux sans snapper ni Timeshift (cas de ce poste) : aucun point de restauration, signalé dans la fenêtre de confirmation. Windows ne crée qu'un point de restauration par 24 h (le récent est réutilisé). Fenêtre de confirmation en root sous Linux : il faut garder l'affichage (`sudo --preserve-env=…`). Restes du catalogue Maintenance : réparation de disque au démarrage sous Linux (pas de mécanisme systemd fiable), défragmentation Linux (sans objet).
+- Services : sous Linux, PID et compteurs de redémarrages relus toutes les 30 s (systemctl show coûte ~0,5 s pour 200 unités) ; l'état, lui, est relu à chaque rafraîchissement.
 
 ## 3. Écarts avec le contrat actuel (à trancher avant de coder)
 
@@ -58,9 +82,12 @@ Le catalogue suppose un socle plus riche que celui décrit dans `CLAUDE.md` et `
 |---|---|---|
 | S0 ✅ | Socle v2 : décisions §3, `Findings`, métadonnées `Level`, paramètres, nommage MCP, mise à jour de `CLAUDE.md` et `PROJECT_CONTEXT.md` | — |
 | S1 ✅ | Compléter Système, Matériel, Réseau, Stockage, constats pour Matériel et Réseau, carte « Outils » | L |
-| S2 | Événements, Services | L |
-| S3 | Sécurité, Logiciels | L |
-| S4 | Cadre des actions A/C (confirmation, dry-run, point de restauration) + tâches longues (job id) + Audit & Traçabilité (JSONL) + Maintenance + actions A/C des modules 1–8 | A / C |
+| S2 ✅ | Événements, Services | L |
+| S3 ✅ | Sécurité, Logiciels | L |
+| S4a ✅ | Cadre des actions A (aperçu `-DryRun`, `Blocked`, `Changes`, fenêtre de confirmation `SysInfo --confirm`), tâches longues (job id, annulation, délai), journal d'audit JSONL, actions A des modules 1–8 | A |
+| S4b ✅ | Actions C (admin, aperçu, point de restauration, case « J'ai lu l'aperçu ») des modules 1–8, module Maintenance, module Audit & Traçabilité (journal, annulation par `undo`, export), liste blanche MCP dans les Paramètres | C |
+| UX ✅ | « Voir plus » (tableaux, listes, jauges, constats), animations de hauteur (`AnimatedHeight`), constats animés à l'entrée et à la sortie, fondu des pages et du contenu, carte Outils séparée en consultations / actions | — |
+| Activité ✅ | Page Activité : tâches en cours avec journal et progression en direct (`Write-Information`, `Write-Progress` relayés par `PowerShellService`), arrêt, tâches longues MCP ; historique tiré du journal d'audit avec détail ; pastille dans la barre latérale | — |
 | S5 | Performance (historique persistant, alertes), Capteurs & Énergie | L / A |
 | S6 | Démarrage & Boot, Tâches planifiées, Sauvegarde, Impression, Virtualisation, Domaine & Configuration | L / A |
 | S7 | Inventaire, Rapports (exports, snapshots, anonymisation), Diagnostic guidé | L |
@@ -70,15 +97,47 @@ Le catalogue suppose un socle plus riche que celui décrit dans `CLAUDE.md` et `
 | # | Sujet | Décision |
 |---|---|---|
 | 3.1 | Granularité MCP | **Hybride** : `get_<id>` = vue d'ensemble (`Get-ModuleData`) + une fonction ciblée par outil `<id>_<name>`, déclarée dans `module.json` (`functions`). Contrat §4.4 |
-| 3.2 | Actions via MCP | **Lecture seule** : seules les fonctions `L` sont exposées. A/C en S4 avec confirmation UI + audit |
+| 3.2 | Actions via MCP | `L` exposé librement ; `A` exposé depuis S4a avec aperçu, confirmation dans une fenêtre SysInfo et audit (§ Décisions S4a) ; `C` en S4b |
 | 3.3 | Format de sortie | `Findings` à côté de `Sections` dans le retour PowerShell ; enveloppe `module / function / platform / timestamp / durationMs / status / data / findings` construite en C# (`Mcp/Envelope.cs`) |
 | 3.4 | Paramètres | Déclarés par fonction (`parameters` : type, enum, bornes, défaut), vérifiés en C#, passés en `-Nom` à PowerShell. `Get-ModuleData` reste sans paramètre |
-| 3.5 | Tâches longues | **Reporté à S4** (SFC, DISM, scan) : start → job id → status / result. Le traceroute reste en cache dans le module Réseau |
+| 3.5 | Tâches longues | Fait en S4a : `"long": true` ; attente 25 s puis job id, `job_status` / `job_cancel`, délai `timeoutSeconds`. Le traceroute reste en cache dans le module Réseau |
 | 3.6 | Métadonnées | `level`, `platforms`, `requiresAdmin`, `dependencies` par fonction |
 | 3.7 | Persistance | **JSONL** (aucune dépendance), à mettre en place en S4 (audit) et S5 (historique) ; à revoir si l'historique 7 jours devient lourd |
 | 3.12 | Données sensibles | Règle écrite dans `CLAUDE.md` et §4.4 ; secrets évidents masqués dans les lignes de commande |
 
-Restent ouverts : propriétaire des recouvrements (§3.10, à trancher au sprint concerné) et rapport client Justware (§3.11, avant S7).
+Restent ouverts : propriétaire des autres recouvrements (§3.10, à trancher au sprint concerné) et rapport client Justware (§3.11, avant S7).
+
+### Décisions S3 (recouvrements, §3.10)
+
+| Sujet | Décision |
+|---|---|
+| Secure Boot (Matériel ↔ Sécurité) | Matériel affiche l'état brut avec le firmware ; Sécurité porte le constat `SEC-SECUREBOOT-OFF` |
+| Démarrage (Logiciels ↔ Sécurité ↔ Tâches planifiées) | Logiciels liste les programmes lancés à l'ouverture de session et leur état ; Sécurité analyse tous les points de persistance et ne montre que les suspects ; les tâches planifiées restent au module 14 (Sécurité ne lit que celles hors Microsoft, pour la persistance) |
+| Mises à jour (Logiciels ↔ Événements) | Logiciels : en attente, historique, redémarrage requis (`SW-…`) ; Événements garde `EVT-UPDATE-FAILED` (échecs vus dans les journaux) |
+| Signaux de sécurité des services | Restent dans Services (`SVC-UNQUOTED-PATH`, `SVC-UNSIGNED-BINARY`), non repris par le score de Sécurité |
+
+### Décisions S4a (2026-10-23)
+
+| Sujet | Décision |
+|---|---|
+| Confirmation d'une action MCP | Le serveur (sans fenêtre) lance `SysInfo --confirm <demande.json>` : fenêtre dédiée qui recalcule elle-même l'aperçu, « Refuser » par défaut (Entrée, Échap, fermeture), refus automatique après 120 s, réponse sur stdout. Marche que l'app principale soit ouverte ou non ; exige une session graphique (sinon erreur claire). Pas d'elicitation MCP (le client pourrait l'auto-approuver) |
+| Découpage S4 | S4a (cadre + actions A) puis S4b (actions C, Maintenance, onglet Audit) |
+| Aperçu | `-DryRun` obligatoire pour toute action ; `Blocked` arrête tout avant la confirmation |
+| Audit | JSONL mensuel, appels MCP (lectures comprises) + carte « Outils » + actions ; pas le rafraîchissement automatique ; rétention 365 jours |
+| Exposition | Réglage `mcpActions` (activé par défaut) ; la liste blanche par outil reste pour l'onglet Audit (S4b) |
+| Runspaces | Trois par module (`ModuleRunner`) : vue d'ensemble, fonctions et actions, tâches longues |
+
+### Décisions S4b (2026-10-23)
+
+| Sujet | Décision |
+|---|---|
+| Droits des actions C | Administrateur exigé pour l'exécution, dans la fenêtre comme en MCP ; l'aperçu reste possible sans |
+| Point de restauration | Créé par SysInfo (C#) avant chaque action C, via `New-SIRestorePoint` du module Maintenance ; `"restorePoint": false` pour s'en passer. Impossible : affiché dans la confirmation, l'utilisateur décide ; échec alors qu'il était possible : action annulée |
+| Exposition MCP des C | Désactivée par défaut (`mcpCriticalActions`) ; liste blanche par outil A / C dans Paramètres |
+| Annulation | Champ `Undo` des actions (fonction inverse du même module), rejoué par `audit_undo` si elle est de niveau A ; une annulation C se lance par son outil |
+| Audit | Module PowerShell `Modules/Audit` qui relit le JSONL (pas d'onglet C# dédié) ; entrées identifiées par `id` |
+| Recouvrement points de restauration (§3.10) | Maintenance les crée et les liste ; Sauvegarde & Restauration (module 15) les reprendra en lecture |
+| Vérification puis réparation des paquets (Linux) | La réparation s'appuie sur la dernière vérification (fichier d'état, moins de 7 jours) au lieu de relancer `rpm -Va` |
 
 ### Livré en S0
 

@@ -21,10 +21,21 @@ public partial class SettingsViewModel : NavPageViewModel
     private readonly bool _initialized;
 
     public SettingsViewModel(AppSettings settings, int moduleCount, IReadOnlyList<string> moduleErrors)
+        : this(settings, moduleCount, moduleErrors, []) { }
+
+    public SettingsViewModel(AppSettings settings, int moduleCount, IReadOnlyList<string> moduleErrors, IReadOnlyList<LoadedModule> modules)
     {
         _settings = settings;
+        McpCriticalActions = settings.McpCriticalActions;
+        ActionTools = modules
+            .SelectMany(m => m.Functions.Where(f => f.IsAction).Select(f => new McpToolChoice(
+                Mcp.ModuleTool.FunctionName(m.Manifest, f), $"{m.Manifest.Title} · {f.Title ?? f.Name}",
+                f.Level == AccessLevel.C, !settings.McpDisabledTools.Contains(Mcp.ModuleTool.FunctionName(m.Manifest, f)), OnToolChanged)))
+            .ToList();
         Theme = settings.Theme;
         PauseWhenMinimized = settings.PauseWhenMinimized;
+        EcoRefresh = settings.EcoRefresh;
+        McpActions = settings.McpActions;
         Accents = AccentPalette.Options.Select(o => new AccentChoice(o)).ToList();
         SelectedAccent = Accents.First(a => a.Option.Id == AccentPalette.Find(settings.Accent).Id);
         ModuleCount = moduleCount;
@@ -75,6 +86,18 @@ public partial class SettingsViewModel : NavPageViewModel
     [ObservableProperty]
     public partial bool PauseWhenMinimized { get; set; }
 
+    /// <summary>Hidden pages refresh less often.</summary>
+    [ObservableProperty]
+    public partial bool EcoRefresh { get; set; }
+
+    partial void OnEcoRefreshChanged(bool value)
+    {
+        if (!_initialized)
+            return;
+        _settings.EcoRefresh = value;
+        SettingsService.Save(_settings);
+    }
+
     partial void OnPauseWhenMinimizedChanged(bool value)
     {
         if (!_initialized)
@@ -82,6 +105,51 @@ public partial class SettingsViewModel : NavPageViewModel
         _settings.PauseWhenMinimized = value;
         SettingsService.Save(_settings);
     }
+
+    // Actions and audit
+
+    /// <summary>Actions (level A) offered to AI agents over MCP; read when `SysInfo --mcp` starts.</summary>
+    [ObservableProperty]
+    public partial bool McpActions { get; set; }
+
+    partial void OnMcpActionsChanged(bool value)
+    {
+        if (!_initialized)
+            return;
+        _settings.McpActions = value;
+        SettingsService.Save(_settings);
+    }
+
+    /// <summary>Critical actions (level C) offered to AI agents over MCP; off by default.</summary>
+    [ObservableProperty]
+    public partial bool McpCriticalActions { get; set; }
+
+    partial void OnMcpCriticalActionsChanged(bool value)
+    {
+        if (!_initialized)
+            return;
+        _settings.McpCriticalActions = value;
+        SettingsService.Save(_settings);
+    }
+
+    /// <summary>MCP whitelist: one switch per action tool.</summary>
+    public IReadOnlyList<McpToolChoice> ActionTools { get; }
+
+    public bool HasActionTools => ActionTools.Count > 0;
+
+    private void OnToolChanged(McpToolChoice tool)
+    {
+        _settings.McpDisabledTools.Remove(tool.Name);
+        if (!tool.Enabled)
+            _settings.McpDisabledTools.Add(tool.Name);
+        SettingsService.Save(_settings);
+    }
+
+    public string AuditDirectory => AuditLog.Directory;
+
+    public string AuditRetentionText => _settings.AuditRetentionDays > 0
+        ? $"Fichiers mensuels JSONL, conservés {_settings.AuditRetentionDays} jours."
+        : "Fichiers mensuels JSONL, conservés sans limite.";
 
     // About
 
@@ -126,4 +194,25 @@ public partial class AccentChoice(AccentOption option) : ObservableObject
 
     [ObservableProperty]
     public partial IBrush? Swatch { get; set; }
+}
+
+/// <summary>One action tool of the MCP whitelist (Settings › Actions et audit).</summary>
+public partial class McpToolChoice(string name, string label, bool critical, bool enabled, Action<McpToolChoice> changed) : ObservableObject
+{
+    private bool _enabled = enabled;
+
+    public string Name { get; } = name;
+    public string Label { get; } = label;
+    public bool IsCritical { get; } = critical;
+    public string Level => IsCritical ? "C" : "A";
+
+    public bool Enabled
+    {
+        get => _enabled;
+        set
+        {
+            if (SetProperty(ref _enabled, value))
+                changed(this);
+        }
+    }
 }

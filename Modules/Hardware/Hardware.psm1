@@ -361,7 +361,7 @@ function ConvertFrom-Edid([byte[]]$Edid) {
     if (-not $Edid -or $Edid.Count -lt 128) { return $null }
     $id = ([int]$Edid[8] -shl 8) -bor $Edid[9]
     $vendor = -join @([char](64 + (($id -shr 10) -band 31)), [char](64 + (($id -shr 5) -band 31)), [char](64 + ($id -band 31)))
-    $name = $null; $serial = $null
+    $name = $null
     foreach ($offset in 54, 72, 90, 108) {
         if ($Edid[$offset] -eq 0 -and $Edid[$offset + 1] -eq 0) {
             $text = ([System.Text.Encoding]::ASCII.GetString($Edid, $offset + 5, 13) -split "`n")[0].Trim()
@@ -858,4 +858,180 @@ function Get-ModuleData {
     [PSCustomObject]@{ Subtitle = ($subtitle -join ' · ').Trim(); Sections = $sections.ToArray(); Findings = $findings.ToArray() }
 }
 
-Export-ModuleMember -Function Get-ModuleData
+#region Fonctions ciblées et actions (module.json › functions)
+
+function New-Finding([string]$Severity, [string]$Code, [string]$Message, [string]$Recommendation) {
+    [PSCustomObject]@{ Severity = $Severity; Code = $Code; Message = $Message; Recommendation = $Recommendation }
+}
+
+# Résultat : Changes = ce qui a changé (ou changerait) ; Blocked = pourquoi l'action est impossible ; Undo = action inverse.
+function New-ActionResult([string]$Subtitle, [object[]]$Sections, [object[]]$Findings, [object[]]$Changes, [string]$Blocked, $Undo) {
+    $r = [ordered]@{
+        Subtitle = $Subtitle; Sections = @($Sections | Where-Object { $_ }); Findings = @($Findings | Where-Object { $_ })
+        Changes = @($Changes | Where-Object { $_ }); Blocked = $Blocked
+    }
+    if ($Undo) { $r.Undo = $Undo }
+    [PSCustomObject]$r
+}
+
+function Get-AdminBlock {
+    if ([Environment]::IsPrivilegedProcess) { return $null }
+    "Droits $(if ($IsWindows) { 'administrateur' } else { 'root' }) requis : relancer SysInfo $(if ($IsWindows) { 'en administrateur' } else { 'avec sudo -E' })."
+}
+
+# Classes Windows jamais désactivées : disque système, contrôleurs de stockage, processeur, système, clavier et souris
+# (on ne pourrait plus réactiver le périphérique).
+$script:ProtectedClasses = @('System', 'Computer', 'Processor', 'DiskDrive', 'Volume', 'HDC', 'SCSIAdapter', 'SoftwareDevice', 'Keyboard', 'Mouse', 'HIDClass', 'Firmware', 'SecurityDevices')
+
+# Modules Linux jamais déchargés : affichage, stockage, contrôleurs USB, saisie, systèmes de fichiers.
+$script:ProtectedModules = @('nvidia', 'nvidia_drm', 'nvidia_modeset', 'nvidia_uvm', 'amdgpu', 'radeon', 'i915', 'xe', 'nouveau', 'nvme', 'nvme_core',
+    'ahci', 'libahci', 'sd_mod', 'xhci_hcd', 'xhci_pci', 'ehci_hcd', 'ehci_pci', 'usbhid', 'hid', 'hid_generic', 'i8042', 'atkbd', 'psmouse',
+    'ext4', 'btrfs', 'xfs', 'vfat', 'dm_crypt', 'dm_mod', 'md_mod', 'raid1')
+
+# Périphériques : Id (Windows : InstanceId ; Linux : pci:<slot> ou usb:<port>), Name, Category, Driver, Enabled, Problem.
+function Get-DeviceList {
+    if ($IsWindows) {
+        return @(Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | ForEach-Object {
+                [PSCustomObject]@{
+                    Id = $_.InstanceId; Name = $_.FriendlyName ?? $_.InstanceId; Category = $_.Class; Driver = $_.Service
+                    Enabled = $_.ConfigManagerErrorCode -ne 22; Problem = if ($_.ConfigManagerErrorCode -notin 0, 22) { ('{0} (code {1})' -f ($script:PnpErrors[[int]$_.ConfigManagerErrorCode] ?? 'Erreur'), $_.ConfigManagerErrorCode) } else { $null }
+                }
+            })
+    }
+    $list = [System.Collections.Generic.List[object]]::new()
+    foreach ($d in Get-LinuxPciDevices) {
+        $list.Add([PSCustomObject]@{ Id = "pci:$($d.Slot)"; Name = $d.Name; Category = $d.Category; Driver = $d.Driver; Enabled = $true; Problem = if (-not $d.Driver -and $d.Class.Substring(0, 2) -notin ('05', '06', '0b')) { 'Aucun pilote chargé' } else { $null } })
+    }
+    foreach ($dir in Get-ChildItem -Path /sys/bus/usb/devices -ErrorAction SilentlyContinue | Where-Object Name -Match '^\d+-[\d.]+$') {
+        if ((Read-SysFile (Join-Path $dir.FullName 'bDeviceClass')) -eq '09') { continue }
+        $drivers = @(Get-ChildItem -Path "$($dir.FullName)/$($dir.Name):*" -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                $link = Join-Path $_.FullName 'driver'; if (Test-Path -LiteralPath $link) { Split-Path -Leaf (Get-Item -LiteralPath $link).Target } } | Select-Object -Unique)
+        $list.Add([PSCustomObject]@{
+                Id = "usb:$($dir.Name)"; Name = (Read-SysFile (Join-Path $dir.FullName 'product')) ?? "Périphérique USB $($dir.Name)"; Category = 'USB'
+                Driver = $drivers -join ', '; Enabled = (Read-SysFile (Join-Path $dir.FullName 'authorized')) -ne '0'; Problem = $null
+            })
+    }
+    $list.ToArray()
+}
+
+# hardware_list_devices : périphériques avec leur identifiant (à passer à set_device et reinstall_driver).
+function Get-SIDevices {
+    param(
+        [string]$Filter,
+        [bool]$ProblemOnly = $false,
+        [ValidateRange(1, 2000)][int]$Top = 200
+    )
+    $devices = @(Get-DeviceList)
+    if ($Filter) { $devices = @($devices | Where-Object { $_.Name -like "*$Filter*" -or $_.Category -like "*$Filter*" -or $_.Driver -like "*$Filter*" -or $_.Id -like "*$Filter*" }) }
+    if ($ProblemOnly) { $devices = @($devices | Where-Object { $_.Problem -or -not $_.Enabled }) }
+    $rows = @($devices | Sort-Object Category, Name | Select-Object -First $Top | ForEach-Object { , @($_.Name, $_.Category, $_.Driver, $(if ($_.Enabled) { 'Oui' } else { 'Non' }), $_.Problem, $_.Id) })
+    [PSCustomObject]@{
+        Subtitle = '{0} périphérique(s){1}' -f $devices.Count, $(if ($Filter) { " · filtre « $Filter »" } else { '' })
+        Sections = @([PSCustomObject]@{ Title = 'Périphériques'; Type = 'Table'; Icon = 'developer_board'; Columns = @('Nom', 'Catégorie', 'Pilote', 'Activé', 'Problème', 'Identifiant'); Rows = $rows })
+        Findings = @()
+    }
+}
+
+function Find-Device([string]$Id) { @(Get-DeviceList) | Where-Object { $_.Id -eq $Id } | Select-Object -First 1 }
+
+function Get-DeviceSection($Device) {
+    [PSCustomObject]@{ Title = 'Périphérique'; Type = 'KeyValue'; Icon = 'developer_board'; Items = [ordered]@{ Nom = $Device.Name; Catégorie = $Device.Category; Pilote = $Device.Driver ?? '—'; Activé = $(if ($Device.Enabled) { 'Oui' } else { 'Non' }); Identifiant = $Device.Id } }
+}
+
+# hardware_set_device : désactive ou réactive un périphérique.
+# Windows : Disable-PnpDevice / Enable-PnpDevice (administrateur). Linux : périphériques USB seulement, par
+# /sys/bus/usb/devices/<port>/authorized (root) ; un périphérique PCI ne se désactive pas ici.
+function Set-SIDevice {
+    param(
+        [Parameter(Mandatory)][string]$DeviceId,
+        [Parameter(Mandatory)][bool]$Enabled,
+        [switch]$DryRun
+    )
+    $device = Find-Device $DeviceId
+    if (-not $device) { return New-ActionResult "Périphérique $DeviceId" @() @() @() "Aucun périphérique « $DeviceId » (identifiants : hardware_list_devices)." }
+    $state = if ($Enabled) { 'activé' } else { 'désactivé' }
+    $blocked = $null
+    if ($device.Enabled -eq $Enabled) { $blocked = "$($device.Name) est déjà $state." }
+    $findings = [System.Collections.Generic.List[object]]::new()
+    if (-not $blocked -and -not $Enabled) {
+        if ($IsWindows -and $device.Category -in $script:ProtectedClasses) { $blocked = "$($device.Name) ($($device.Category)) est nécessaire au système ou à la saisie : SysInfo ne le désactive pas." }
+        elseif ($IsLinux -and $device.Id -like 'pci:*') { $blocked = 'Sous Linux, seuls les périphériques USB se désactivent ici (un périphérique PCI se retire en déchargeant son pilote : reinstall_driver).' }
+        elseif ($IsLinux) {
+            $port = $device.Id.Substring(4)
+            $classes = @(Get-ChildItem -Path "/sys/bus/usb/devices/$port/${port}:*" -Directory -ErrorAction SilentlyContinue | ForEach-Object { Read-SysFile (Join-Path $_.FullName 'bInterfaceClass') })
+            if ($classes -contains '03') { $blocked = "$($device.Name) est un clavier, une souris ou un autre périphérique de saisie : SysInfo ne le désactive pas." }
+            elseif ($classes -contains '08') {
+                $mounted = @(& lsblk -J -o NAME,MOUNTPOINTS,TRAN 2>$null | ConvertFrom-Json -ErrorAction SilentlyContinue | ForEach-Object blockdevices | Where-Object { $_.tran -eq 'usb' } | ForEach-Object { $_.children } | Where-Object { $_.mountpoints | Where-Object { $_ } })
+                if ($mounted) { $findings.Add((New-Finding 'warning' 'HW-DEVICE-STORAGE' 'Un disque USB est monté : le démonter avant, sinon des données en cours d''écriture peuvent être perdues.' 'Éjecter le disque depuis le gestionnaire de fichiers.')) }
+            }
+        }
+        if ($device.Category -in 'Net', 'Réseau' -or $device.Driver -match 'e1000|r8169|igc|iwlwifi|ath|rtw|mt7') { $findings.Add((New-Finding 'warning' 'HW-DEVICE-NETWORK' 'Carte réseau : la connexion qui passe par elle sera coupée.' $null)) }
+        if ($device.Category -in 'Display', 'Affichage') { $findings.Add((New-Finding 'warning' 'HW-DEVICE-DISPLAY' 'Carte graphique : l''affichage passe en mode de base (basse résolution) jusqu''à sa réactivation.' $null)) }
+    }
+    if (-not $blocked) { $blocked = Get-AdminBlock }
+    $findings.Add((New-Finding 'info' 'HW-DEVICE-UNDO' "Réversible : hardware_set_device avec enabled = $(-not $Enabled)." $null))
+    $change = [PSCustomObject]@{ Target = $device.Name; Property = 'Activé'; Before = $(if ($device.Enabled) { 'Oui' } else { 'Non' }); After = $(if ($Enabled) { 'Oui' } else { 'Non' }) }
+    if ($DryRun -or $blocked) { return New-ActionResult "$($device.Name) sera $state" @(Get-DeviceSection $device) $findings @($change) $blocked }
+
+    if ($IsWindows) {
+        if ($Enabled) { Enable-PnpDevice -InstanceId $device.Id -Confirm:$false -ErrorAction Stop } else { Disable-PnpDevice -InstanceId $device.Id -Confirm:$false -ErrorAction Stop }
+    }
+    else { Set-Content -LiteralPath "/sys/bus/usb/devices/$($device.Id.Substring(4))/authorized" -Value $(if ($Enabled) { '1' } else { '0' }) -ErrorAction Stop }
+    $now = Find-Device $DeviceId
+    $change.After = if ($now.Enabled) { 'Oui' } else { 'Non' }
+    New-ActionResult "$($device.Name) $state" @(Get-DeviceSection ($now ?? $device)) @() @($change) $null @{ Function = 'set_device'; Parameters = @{ deviceId = $DeviceId; enabled = -not $Enabled } }
+}
+
+# hardware_reinstall_driver : réinstalle le pilote d'un périphérique.
+# Windows : pnputil /remove-device puis /scan-devices (Windows redétecte le périphérique et réinstalle son pilote).
+# Linux   : modprobe -r puis modprobe du module du périphérique (pilotes d'affichage, de stockage, USB et de saisie exclus).
+function Update-SIDriver {
+    param(
+        [Parameter(Mandatory)][string]$DeviceId,
+        [switch]$DryRun
+    )
+    $device = Find-Device $DeviceId
+    if (-not $device) { return New-ActionResult "Périphérique $DeviceId" @() @() @() "Aucun périphérique « $DeviceId » (identifiants : hardware_list_devices)." }
+    $blocked = $null
+    $findings = [System.Collections.Generic.List[object]]::new()
+    $module = $null
+    if ($IsWindows) {
+        if (-not $blocked -and $device.Category -in 'System', 'Computer', 'Processor', 'DiskDrive', 'Volume', 'HDC', 'SCSIAdapter') { $blocked = "$($device.Name) ($($device.Category)) porte le système : SysInfo ne le retire pas." }
+        $findings.Add((New-Finding 'warning' 'HW-DRIVER-REINSTALL' 'Le périphérique disparaît quelques secondes puis est redétecté ; si Windows ne retrouve pas de pilote, il reste sans pilote.' 'Garder le pilote du fabricant sous la main.'))
+    }
+    else {
+        $module = ($device.Driver -split ',\s*' | Select-Object -First 1) -replace '-', '_'
+        if (-not $blocked -and -not $module) { $blocked = "$($device.Name) n'a pas de pilote chargé : rien à réinstaller (modprobe <module> pour en charger un)." }
+        elseif (-not $blocked -and -not (Test-Path "/sys/module/$module/initstate")) { $blocked = "Le pilote $module est intégré au noyau : il ne se décharge pas." }
+        elseif (-not $blocked -and $module -in $script:ProtectedModules) { $blocked = "Le pilote $module sert à l'affichage, au stockage ou à la saisie : le décharger figerait le système." }
+        elseif (-not $blocked -and [int](Read-SysFile "/sys/module/$module/refcnt") -gt 0) { $blocked = "Le pilote $module est utilisé par $(Read-SysFile "/sys/module/$module/refcnt") autre(s) module(s) : déchargement impossible." }
+        $users = @(Get-ChildItem "/sys/module/$module/drivers" -ErrorAction SilentlyContinue | ForEach-Object { Get-ChildItem $_.FullName -ErrorAction SilentlyContinue | Where-Object Name -Match '^[0-9a-f]{4}:|^\d+-' })
+        if ($users.Count -gt 1) { $findings.Add((New-Finding 'warning' 'HW-DRIVER-SHARED' "Le pilote $module gère $($users.Count) périphériques : tous seront arrêtés quelques secondes." $null)) }
+    }
+    if (-not $blocked) { $blocked = Get-AdminBlock }
+    $change = [PSCustomObject]@{ Target = $device.Name; Property = 'Pilote'; Before = $device.Driver ?? '—'; After = 'réinstallé' }
+    if ($DryRun -or $blocked) { return New-ActionResult "Le pilote de $($device.Name) sera réinstallé" @(Get-DeviceSection $device) $findings @($change) $blocked }
+
+    if ($IsWindows) {
+        $out = & pnputil /remove-device $device.Id 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "pnputil /remove-device a échoué : $($out -join ' ')" }
+        & pnputil /scan-devices 2>&1 | Out-Null
+        Start-Sleep -Seconds 3
+    }
+    else {
+        $out = & modprobe -r $module 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "modprobe -r $module a échoué : $($out -join ' ')" }
+        $out = & modprobe $module 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "modprobe $module a échoué (le périphérique est sans pilote) : $($out -join ' ')" }
+        Start-Sleep -Seconds 1
+    }
+    $now = Find-Device $DeviceId
+    $change.After = if ($now) { $now.Driver ?? 'aucun' } else { 'périphérique non redétecté' }
+    $result = @()
+    if (-not $now -or -not $now.Driver) { $result += New-Finding 'warning' 'HW-DRIVER-MISSING' "$($device.Name) n'a pas retrouvé de pilote." 'Installer le pilote du fabricant, ou redémarrer.' }
+    New-ActionResult "Pilote de $($device.Name) réinstallé" @(Get-DeviceSection ($now ?? $device)) $result @($change) $null
+}
+
+#endregion
+
+Export-ModuleMember -Function Get-ModuleData, Get-SIDevices, Set-SIDevice, Update-SIDriver

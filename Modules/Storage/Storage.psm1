@@ -797,6 +797,7 @@ function Get-SISpaceUsage {
     $Path = [System.IO.Path]::GetFullPath($Path)
     if (-not (Test-Path -LiteralPath $Path -PathType Container)) { throw "Dossier introuvable : $Path" }
 
+    Write-Progress -Activity 'Analyse de l''espace' -Status "Parcours de $Path ($TimeoutSeconds s au plus)…"
     $report = [SysInfo.Storage.DirectorySizer]::Analyze($Path, $Top, $TimeoutSeconds * 1000, [string[]](Get-ExcludedMounts))
     $folders = foreach ($f in $report.Folders | Select-Object -First $Top) {
         , @($f.Path, [Math]::Round($f.Bytes / 1GB, 2), $f.Files, $(if ($report.TotalBytes -gt 0) { [Math]::Round(100 * $f.Bytes / $report.TotalBytes, 1) } else { 0 }))

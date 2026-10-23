@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -60,6 +61,33 @@ public sealed record ModuleFunction
 
     /// <summary>Optional external tools the function uses when present (smartctl, nvidia-smi…).</summary>
     public IReadOnlyList<string> Dependencies { get; init; } = [];
+
+    /// <summary>
+    /// Long task (space analysis, antivirus scan…): runs in the module's jobs runspace, can be cancelled, and over MCP
+    /// returns a job id when it outlasts the first wait (see Mcp/JobManager.cs).
+    /// </summary>
+    public bool Long { get; init; }
+
+    /// <summary>Stops the function after this many seconds; 0 = the default (1 hour for a long task, none otherwise).</summary>
+    public int TimeoutSeconds { get; init; }
+
+    /// <summary>
+    /// Critical action only: create a restore point before running it. Default true for level C; false for an action
+    /// that changes nothing a restore point could bring back (scheduled restart, restore point itself).
+    /// </summary>
+    [System.Text.Json.Serialization.JsonPropertyName("restorePoint")]
+    public bool? RestorePointSetting { get; init; }
+
+    public bool NeedsRestorePoint => Level == AccessLevel.C && RestorePointSetting != false;
+
+    /// <summary>Action (level A or C): takes -DryRun, is confirmed by the user and written to the audit log.</summary>
+    public bool IsAction => Level is AccessLevel.A or AccessLevel.C;
+
+    /// <summary>Effective timeout, or null when the function runs until it ends.</summary>
+    public TimeSpan? Timeout =>
+        TimeoutSeconds > 0 ? TimeSpan.FromSeconds(TimeoutSeconds)
+        : Long ? TimeSpan.FromHours(1)
+        : null;
 }
 
 /// <summary>
@@ -102,7 +130,8 @@ public enum ParameterType
 /// <summary>
 /// Access level of a function (Specifications.md, « Règles MCP ») :
 /// L read only · A reversible action · C critical action · X never exposed to MCP.
-/// Only L is exposed to MCP for now; A and C wait for the confirmation and audit framework (sprint S4).
+/// A and C have a dry-run preview, a confirmation window and an audit line; C also needs administrator rights, a
+/// restore point before it runs and an explicit acknowledgement. X is never exposed to MCP.
 /// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter<AccessLevel>))]
 public enum AccessLevel

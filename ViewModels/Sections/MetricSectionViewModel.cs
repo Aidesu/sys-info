@@ -40,6 +40,13 @@ public partial class MetricSectionViewModel : SectionViewModel
     [NotifyPropertyChangedFor(nameof(SecondaryAverageText), nameof(SecondaryMaximumText))]
     public partial IReadOnlyList<double>? SecondaryHistory { get; private set; }
 
+    /// <summary>
+    /// Time covered by the chart: the module's refresh interval × (HistoryLength − 1). Set by the page; zero = place
+    /// samples by rank.
+    /// </summary>
+    [ObservableProperty]
+    public partial TimeSpan ChartWindow { get; set; }
+
     /// <summary>Time of each value in <see cref="History"/>.</summary>
     [ObservableProperty]
     public partial IReadOnlyList<DateTime> HistoryTimes { get; private set; } = [];

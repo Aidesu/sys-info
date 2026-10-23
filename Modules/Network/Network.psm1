@@ -573,7 +573,9 @@ function Get-ModuleData {
         try { & $Block } catch { $errors[$Name] = $_.Exception.Message; $null }
     }
 
-    $interfaces = @(Invoke-Block 'Interfaces' { Get-Interfaces })
+    # Liste des interfaces relue toutes les 10 s (~15 ms avec les interfaces virtuelles de Docker) ; le débit, lui,
+    # est lu à chaque appel sur l'objet de la connexion principale.
+    $interfaces = @(Invoke-Block 'Interfaces' { Get-Cached 'interfaces' 10 { @(Get-Interfaces) } })
     $primary = Get-PrimaryInterface $interfaces
     Invoke-Block 'Traceroute' { Update-Traceroute }
 
@@ -739,63 +741,79 @@ function Get-ModuleData {
 
     # Voisins (table ARP)
     Invoke-Block 'Voisins' {
-        $neighbors = @(Get-Cached 'neighbors' 10 { Get-Neighbors })
-        if ($neighbors.Count -gt 0) {
-            $rows = foreach ($n in $neighbors | Sort-Object Interface, { [version]($_.Address -replace '[^\d.]', '') }) { , @($n.Address, $n.Mac, $n.Interface, $n.State) }
-            $sections.Add([PSCustomObject]@{
-                    Title = 'Voisins (table ARP)'; Type = 'Table'; Icon = 'router'
-                    Columns = @('Adresse IP', 'Adresse MAC', 'Interface', 'État'); Rows = @($rows)
-                })
+        # Section entière en cache, relue en même temps que ses données : pas de lignes refaites toutes les 2 s.
+        $section = Get-Cached 'neighbors-section' 10 {
+            $neighbors = @(Get-Cached 'neighbors' 10 { Get-Neighbors })
+            if ($neighbors.Count -gt 0) {
+                $rows = foreach ($n in $neighbors | Sort-Object Interface, { [version]($_.Address -replace '[^\d.]', '') }) { , @($n.Address, $n.Mac, $n.Interface, $n.State) }
+                ([PSCustomObject]@{
+                        Title = 'Voisins (table ARP)'; Type = 'Table'; Icon = 'router'
+                        Columns = @('Adresse IP', 'Adresse MAC', 'Interface', 'État'); Rows = @($rows)
+                    })
+            }
         }
+        if ($section) { $sections.Add($section) }
     }
 
     # Routes IPv4
     Invoke-Block 'Routes' {
-        $routes = @(Get-Cached 'routes' 10 { Get-Routes })
-        if ($routes.Count -gt 0) {
-            $rows = foreach ($r in $routes) {
-                , @($r.Destination, $r.Gateway, $r.Interface, $r.Metric, $(if ($r.Down) { "$($r.Origin) · lien coupé" } else { $r.Origin }))
+        # Section entière en cache, relue en même temps que ses données : pas de lignes refaites toutes les 2 s.
+        $section = Get-Cached 'routes-section' 10 {
+            $routes = @(Get-Cached 'routes' 10 { Get-Routes })
+            if ($routes.Count -gt 0) {
+                $rows = foreach ($r in $routes) {
+                    , @($r.Destination, $r.Gateway, $r.Interface, $r.Metric, $(if ($r.Down) { "$($r.Origin) · lien coupé" } else { $r.Origin }))
+                }
+                ([PSCustomObject]@{
+                        Title = 'Routes IPv4'; Type = 'Table'; Icon = 'arrow_routing'
+                        Columns = @('Destination', 'Passerelle', 'Interface', 'Métrique', 'Origine')
+                        Rows = @($rows)
+                    })
             }
-            $sections.Add([PSCustomObject]@{
-                    Title = 'Routes IPv4'; Type = 'Table'; Icon = 'arrow_routing'
-                    Columns = @('Destination', 'Passerelle', 'Interface', 'Métrique', 'Origine')
-                    Rows = @($rows)
-                })
         }
+        if ($section) { $sections.Add($section) }
     }
 
     # Ports en écoute : une ligne par port et protocole, les adresses d'écoute regroupées
     Invoke-Block 'Ports' {
-        $groups = @(Get-Cached 'ports' 10 { Get-ListeningPorts } | Group-Object Port, Protocol)
-        if ($groups.Count -gt 0) {
-            $rows = foreach ($g in $groups) {
-                $first = $g.Group[0]
-                $addresses = $g.Group.Address | Select-Object -Unique
-                $where = if ($addresses -contains '0.0.0.0' -or $addresses -contains '::') { 'toutes les interfaces' } else { $addresses -join ', ' }
-                $process = ($g.Group.Process | Where-Object { $_ } | Select-Object -Unique) -join ', '
-                , @($first.Port, $first.Protocol, $where, $(if ($process) { $process } else { $null }))
+        # Section entière en cache, relue en même temps que ses données : pas de lignes refaites toutes les 2 s.
+        $section = Get-Cached 'ports-section' 10 {
+            $groups = @(Get-Cached 'ports' 10 { Get-ListeningPorts } | Group-Object Port, Protocol)
+            if ($groups.Count -gt 0) {
+                $rows = foreach ($g in $groups) {
+                    $first = $g.Group[0]
+                    $addresses = $g.Group.Address | Select-Object -Unique
+                    $where = if ($addresses -contains '0.0.0.0' -or $addresses -contains '::') { 'toutes les interfaces' } else { $addresses -join ', ' }
+                    $process = ($g.Group.Process | Where-Object { $_ } | Select-Object -Unique) -join ', '
+                    , @($first.Port, $first.Protocol, $where, $(if ($process) { $process } else { $null }))
+                }
+                ([PSCustomObject]@{
+                        Title = 'Ports en écoute'; Type = 'Table'; Icon = 'server'
+                        Columns = @('Port', 'Protocole', 'Écoute sur', 'Processus')
+                        Rows = @($rows)
+                    })
             }
-            $sections.Add([PSCustomObject]@{
-                    Title = 'Ports en écoute'; Type = 'Table'; Icon = 'server'
-                    Columns = @('Port', 'Protocole', 'Écoute sur', 'Processus')
-                    Rows = @($rows)
-                })
         }
+        if ($section) { $sections.Add($section) }
     }
 
     # Connexions TCP établies
     Invoke-Block 'Connexions' {
-        $connections = @(Get-Cached 'connections' 10 { Get-TcpConnections })
-        $rows = foreach ($c in $connections | Sort-Object Process, Remote | Select-Object -First 200) {
-            , @($c.Process, $c.Local, $c.Remote, $c.Port)
+        # Section entière en cache, relue en même temps que ses données : pas de lignes refaites toutes les 2 s.
+        $section = Get-Cached 'connections-section' 10 {
+            $connections = @(Get-Cached 'connections' 10 { Get-TcpConnections })
+            $rows = foreach ($c in $connections | Sort-Object Process, Remote | Select-Object -First 200) {
+                , @($c.Process, $c.Local, $c.Remote, $c.Port)
+            }
+            if ($connections.Count -gt 0) {
+                ([PSCustomObject]@{
+                        Title = 'Connexions TCP établies'; Type = 'Table'; Icon = 'arrow_swap'
+                        Columns = @('Processus', 'Adresse locale', 'Adresse distante', 'Port distant')
+                        Rows = @($rows)
+                    })
+            }
         }
-        if ($connections.Count -gt 0) {
-            $sections.Add([PSCustomObject]@{
-                    Title = 'Connexions TCP établies'; Type = 'Table'; Icon = 'arrow_swap'
-                    Columns = @('Processus', 'Adresse locale', 'Adresse distante', 'Port distant')
-                    Rows = @($rows)
-                })
-        }
+        if ($section) { $sections.Add($section) }
     }
 
     # VPN, partages, proxy et hosts
@@ -811,14 +829,18 @@ function Get-ModuleData {
     }
 
     Invoke-Block 'Partages' {
-        $shares = @(Get-Cached 'shares' 30 { Get-NetworkShares })
-        if ($shares.Count -gt 0) {
-            $rows = foreach ($sh in $shares) { , @($sh.Kind, $sh.Name, $sh.Source, $sh.Target, $sh.State) }
-            $sections.Add([PSCustomObject]@{
-                    Title = 'Partages et lecteurs réseau'; Type = 'Table'; Icon = 'hard_drive'
-                    Columns = @('Type', 'Nom', 'Source', 'Point de montage', 'État'); Rows = @($rows)
-                })
+        # Section entière en cache, relue en même temps que ses données : pas de lignes refaites toutes les 2 s.
+        $section = Get-Cached 'shares-section' 30 {
+            $shares = @(Get-Cached 'shares' 30 { Get-NetworkShares })
+            if ($shares.Count -gt 0) {
+                $rows = foreach ($sh in $shares) { , @($sh.Kind, $sh.Name, $sh.Source, $sh.Target, $sh.State) }
+                ([PSCustomObject]@{
+                        Title = 'Partages et lecteurs réseau'; Type = 'Table'; Icon = 'hard_drive'
+                        Columns = @('Type', 'Nom', 'Source', 'Point de montage', 'État'); Rows = @($rows)
+                    })
+            }
         }
+        if ($section) { $sections.Add($section) }
     }
 
     Invoke-Block 'Proxy et hosts' {
@@ -880,7 +902,7 @@ function New-Finding([string]$Severity, [string]$Code, [string]$Message, [string
 function Resolve-Target([string]$Target) {
     $ip = $null
     if ([System.Net.IPAddress]::TryParse($Target, [ref]$ip)) { return $ip }
-    $addresses = [System.Net.Dns]::GetHostAddresses($Target)
+    $addresses = try { [System.Net.Dns]::GetHostAddresses($Target) } catch { throw "Nom introuvable : $Target (la résolution DNS a échoué)" }
     ($addresses | Where-Object AddressFamily -eq 'InterNetwork' | Select-Object -First 1) ?? ($addresses | Select-Object -First 1)
 }
 
@@ -893,10 +915,12 @@ function Get-SIPing {
     )
     $address = Resolve-Target $Target
     $ping = [System.Net.NetworkInformation.Ping]::new()
-    $rows = for ($i = 1; $i -le $Count; $i++) {
+    # Liste explicite : avec un seul ping, un tableau de lignes serait « déroulé » par PowerShell.
+    $rows = [System.Collections.Generic.List[object]]::new()
+    for ($i = 1; $i -le $Count; $i++) {
         $reply = try { $ping.Send($address, $TimeoutMs) } catch { $null }
         $ok = $reply -and $reply.Status -eq 'Success'
-        , @($i, $(if ($ok) { 'Oui' } else { "Non ($($reply.Status ?? 'erreur'))" }), $(if ($ok) { [double]$reply.RoundtripTime } else { $null }), $(if ($ok -and $reply.Options) { $reply.Options.Ttl } else { $null }))
+        $rows.Add(@($i, $(if ($ok) { 'Oui' } else { "Non ($($reply.Status ?? 'erreur'))" }), $(if ($ok) { [double]$reply.RoundtripTime } else { $null }), $(if ($ok -and $reply.Options) { $reply.Options.Ttl } else { $null })))
         if ($i -lt $Count) { Start-Sleep -Milliseconds 200 }
     }
     $ping.Dispose()
@@ -913,7 +937,7 @@ function Get-SIPing {
 
     New-Result ('Ping vers {0} ({1})' -f $Target, $address) @(
         [PSCustomObject]@{ Title = 'Résumé'; Type = 'KeyValue'; Icon = 'network_check'; Items = $summary }
-        [PSCustomObject]@{ Title = 'Réponses'; Type = 'Table'; Icon = 'timer'; Columns = @('N°', 'Réponse', 'Temps (ms)', 'TTL'); Rows = @($rows) }
+        [PSCustomObject]@{ Title = 'Réponses'; Type = 'Table'; Icon = 'timer'; Columns = @('N°', 'Réponse', 'Temps (ms)', 'TTL'); Rows = $rows.ToArray() }
     ) $findings
 }
 
@@ -1041,6 +1065,7 @@ function Get-SILanDevices {
     }
 
     # Pings en parallèle (un objet Ping par cible), puis attente commune.
+    Write-Progress -Activity 'Découverte du réseau local' -Status "Ping de $(@($targets).Count) adresses…" -PercentComplete 10
     $pings = foreach ($t in $targets) { [PSCustomObject]@{ Address = "$t"; Task = [System.Net.NetworkInformation.Ping]::new().SendPingAsync($t, $TimeoutMs) } }
     try { [void][System.Threading.Tasks.Task]::WaitAll([System.Threading.Tasks.Task[]]@($pings.Task), $TimeoutMs + 1000) } catch { }
     $alive = @{}
@@ -1048,6 +1073,8 @@ function Get-SILanDevices {
 
     # Table ARP après le balayage : aussi les appareils qui ignorent le ping mais ont répondu en ARP.
     $macs = @{}
+    Write-Information "$($alive.Count) appareil(s) ont répondu au ping"
+    Write-Progress -Activity 'Découverte du réseau local' -Status 'Voisins ARP, noms DNS et mDNS…' -PercentComplete 60
     foreach ($n in Get-Neighbors | Where-Object Interface -eq $primary.Name) { $macs[$n.Address] = $n.Mac }
     $addresses = @($alive.Keys) + @($macs.Keys) + @("$own") | Select-Object -Unique
 
@@ -1135,4 +1162,196 @@ function Resolve-SIDns {
 
 #endregion
 
-Export-ModuleMember -Function Get-ModuleData, Get-SIPing, Get-SITraceroute, Test-SIPort, Get-SIPathMtu, Get-SIPublicIp, Get-SILanDevices, Resolve-SIDns
+#region Actions (niveau A : aperçu -DryRun, confirmation dans SysInfo, journal d'audit)
+
+# Résultat d'une action : Changes = ce qui a changé (ou changerait) ; Blocked = pourquoi elle est impossible.
+function New-ActionResult([string]$Subtitle, [object[]]$Sections, [object[]]$Findings, [object[]]$Changes, [string]$Blocked) {
+    [PSCustomObject]@{
+        Subtitle = $Subtitle
+        Sections = @($Sections | Where-Object { $_ })
+        Findings = @($Findings | Where-Object { $_ })
+        Changes  = @($Changes | Where-Object { $_ })
+        Blocked  = $Blocked
+    }
+}
+function New-Change([string]$Target, [string]$Property, $Before, $After) {
+    [PSCustomObject]@{ Target = $Target; Property = $Property; Before = $Before; After = $After }
+}
+
+# network_flush_dns : vide le cache DNS local (noms résolus récemment), utile après un changement d'adresse d'un site
+# ou de serveur DNS. Windows : ipconfig /flushdns (sans droits administrateur). Linux : resolvectl flush-caches
+# (systemd-resolved), sinon nscd -i hosts ; sans cache local, rien à vider.
+function Clear-SIDnsCache {
+    param([switch]$DryRun)
+
+    $resolver = $null; $blocked = $null; $before = $null
+    if ($IsWindows) {
+        $resolver = 'Client DNS Windows'
+        $before = @(Get-DnsClientCache -ErrorAction SilentlyContinue).Count
+    }
+    elseif ((Invoke-Tool systemctl @('is-active', 'systemd-resolved')) -eq 'active') { $resolver = 'systemd-resolved' }
+    elseif ((Invoke-Tool systemctl @('is-active', 'nscd')) -eq 'active') { $resolver = 'nscd' }
+    else { $blocked = 'Aucun cache DNS local actif (ni systemd-resolved ni nscd) : chaque résolution interroge déjà le serveur DNS.' }
+
+    $test = Test-DnsResolution
+    $section = [PSCustomObject]@{
+        Title = 'Cache DNS'; Type = 'KeyValue'; Icon = 'globe'
+        Items = [ordered]@{
+            'Cache'                 = $resolver ?? 'aucun'
+            'Entrées en cache'      = $before ?? '—'
+            "Résolution de $($test.Name)" = if ($test.Ok) { Format-Unit $test.Ms 'ms' '0' } else { 'échec' }
+        }
+    }
+    $findings = @(New-Finding 'info' 'NET-DNS-FLUSH-SLOWER' 'Les prochaines résolutions de noms seront un peu plus lentes, le temps que le cache se remplisse.' $null)
+    $after = if ($IsWindows) { 0 } else { 'vidé' }
+    $change = New-Change ($resolver ?? 'Cache DNS') 'Entrées en cache' ($before ?? 'en mémoire') $after
+
+    if ($DryRun -or $blocked) { return New-ActionResult "Le cache DNS ($($resolver ?? 'aucun')) sera vidé" @($section) $findings @($change) $blocked }
+
+    $out = if ($IsWindows) { & ipconfig /flushdns 2>&1 }
+           elseif ($resolver -eq 'systemd-resolved') { & resolvectl flush-caches --no-ask-password 2>&1 }
+           else { & nscd -i hosts 2>&1 }
+    if ($LASTEXITCODE -ne 0) { throw "Le cache DNS n'a pas été vidé : $($out -join ' ')" }
+
+    if ($IsWindows) { $change = New-Change $resolver 'Entrées en cache' $before @(Get-DnsClientCache -ErrorAction SilentlyContinue).Count }
+    New-ActionResult "Cache DNS vidé ($resolver)" @($section) @() @($change) $null
+}
+
+# network_renew_dhcp : redemande une adresse au serveur DHCP pour une interface (par défaut la connexion principale).
+# Windows : ipconfig /renew (droits administrateur). Linux : NetworkManager, nmcli connection up (la connexion est
+# réactivée : coupure de quelques secondes).
+function Update-SIDhcpLease {
+    param(
+        [string]$Interface,
+        [switch]$DryRun
+    )
+
+    $interfaces = @(Get-Interfaces)
+    $nic = if ($Interface) { $interfaces | Where-Object { $_.Name -eq $Interface -or $_.Nic.Description -eq $Interface } | Select-Object -First 1 }
+           else { Get-PrimaryInterface $interfaces }
+    if (-not $nic) {
+        $known = ($interfaces | Where-Object { $_.Up -and $_.Physical } | ForEach-Object Name) -join ', '
+        return New-ActionResult 'Interface introuvable' @() @() @() $(if ($Interface) { "Aucune interface « $Interface » (actives : $known)." } else { 'Aucune connexion active avec une passerelle.' })
+    }
+
+    $dhcp = Get-DhcpInfo $nic
+    $ip = if ($nic.Ipv4) { '{0}/{1}' -f $nic.Ipv4.Address, $nic.Ipv4.PrefixLength } else { 'aucune' }
+    $items = [ordered]@{ Interface = $nic.Name; 'Adresse IPv4' = $ip; 'Passerelle' = if ($nic.Gateway) { "$($nic.Gateway.Address)" } else { '—' } }
+    if ($dhcp.Server) { $items['Serveur DHCP'] = $dhcp.Server }
+    if ($dhcp.Expires) { $items['Fin du bail'] = ([datetime]$dhcp.Expires).ToString('dd/MM/yyyy HH:mm', $script:Fr) }
+
+    $blocked = $null; $connection = $null
+    if (-not $dhcp.Enabled) { $blocked = "$($nic.Name) a une adresse fixe : pas de bail DHCP à renouveler." }
+    elseif ($IsWindows -and -not [Environment]::IsPrivilegedProcess) { $blocked = 'ipconfig /renew exige les droits administrateur : relancer SysInfo en administrateur.' }
+    elseif ($IsLinux) {
+        $line = Invoke-Tool nmcli @('-t', '-f', 'UUID,DEVICE,NAME', 'connection', 'show', '--active') | Where-Object { (Split-Nmcli $_)[1] -eq $nic.Name } | Select-Object -First 1
+        if ($line) { $f = Split-Nmcli $line; $connection = @{ Uuid = $f[0]; Name = $f[2] }; $items['Connexion'] = $f[2] }
+        else { $blocked = "$($nic.Name) n'est pas gérée par NetworkManager : renouvellement non pris en charge." }
+    }
+
+    $section = [PSCustomObject]@{ Title = 'Connexion'; Type = 'KeyValue'; Icon = 'router'; Items = $items }
+    $findings = @(New-Finding 'warning' 'NET-DHCP-RENEW-CUT' "La connexion $($nic.Name) sera coupée quelques secondes : téléchargements, appels et sessions à distance en cours peuvent être interrompus." $null)
+    if ($DryRun -or $blocked) {
+        return New-ActionResult "Le bail DHCP de $($nic.Name) sera renouvelé" @($section) $findings @(New-Change $nic.Name 'Adresse IPv4' $ip 'nouvelle demande au serveur DHCP') $blocked
+    }
+
+    $out = if ($IsWindows) { & ipconfig /renew $nic.Name 2>&1 } else { & nmcli -w 45 connection up uuid $connection.Uuid 2>&1 }
+    if ($LASTEXITCODE -ne 0) { throw "Renouvellement impossible : $(($out | Where-Object { $_ }) -join ' ')" }
+
+    # Nouvelle adresse et nouveau bail, une fois l'interface revenue.
+    Start-Sleep -Seconds 2
+    $now = @(Get-Interfaces) | Where-Object Name -eq $nic.Name | Select-Object -First 1
+    $newIp = if ($now -and $now.Ipv4) { '{0}/{1}' -f $now.Ipv4.Address, $now.Ipv4.PrefixLength } else { 'aucune' }
+    $changes = @(New-Change $nic.Name 'Adresse IPv4' $ip $newIp)
+    $newDhcp = if ($now) { Get-DhcpInfo $now } else { $null }
+    if ($newDhcp.Expires) {
+        $changes += New-Change $nic.Name 'Fin du bail' $(if ($dhcp.Expires) { ([datetime]$dhcp.Expires).ToString('dd/MM/yyyy HH:mm', $script:Fr) } else { '—' }) ([datetime]$newDhcp.Expires).ToString('dd/MM/yyyy HH:mm', $script:Fr)
+    }
+    $result = @()
+    if ($newIp -eq 'aucune') { $result += New-Finding 'critical' 'NET-DHCP-NO-ADDRESS' "$($nic.Name) n'a pas obtenu d'adresse après le renouvellement." 'Vérifier le câble ou le Wi-Fi et la box, puis relancer.' }
+    New-ActionResult "Bail DHCP de $($nic.Name) renouvelé · $newIp" @($section) $result $changes $null
+}
+
+function Get-AdminBlock {
+    if ([Environment]::IsPrivilegedProcess) { return $null }
+    "Droits $(if ($IsWindows) { 'administrateur' } else { 'root' }) requis : relancer SysInfo $(if ($IsWindows) { 'en administrateur' } else { 'avec sudo -E' })."
+}
+
+# network_reset_stack : Windows, réinitialise Winsock et la pile TCP/IP (netsh winsock reset, netsh int ip reset)
+# quand la connexion reste impossible malgré une configuration correcte. Redémarrage nécessaire.
+function Reset-SINetworkStack {
+    param([switch]$DryRun)
+    $blocked = Get-AdminBlock
+    $lsp = @(& netsh winsock show catalog 2>$null | Where-Object { $_ -match '^(Description|Description de l''entrée)\s*:' }).Count
+    $section = [PSCustomObject]@{ Title = 'Réinitialisation réseau'; Type = 'KeyValue'; Icon = 'network_check'; Items = [ordered]@{ Commandes = 'netsh winsock reset · netsh int ip reset'; 'Entrées du catalogue Winsock' = $lsp } }
+    $findings = @(
+        New-Finding 'warning' 'NET-RESET-REBOOT' 'Un redémarrage est nécessaire ; d''ici là le réseau peut rester coupé.' 'Enregistrer son travail avant.'
+        New-Finding 'warning' 'NET-RESET-SETTINGS' 'Les adresses IP fixes et certains réglages réseau (proxy WinHTTP excepté) reviennent aux valeurs par défaut ; les logiciels qui s''insèrent dans Winsock (VPN, filtres) peuvent devoir être réinstallés.' 'Noter la configuration IP fixe avant (get_network).'
+    )
+    $changes = @((New-Change 'Winsock' 'Catalogue' "$lsp entrée(s)" 'par défaut'), (New-Change 'Pile TCP/IP' 'Réglages' 'actuels' 'par défaut'))
+    if ($DryRun -or $blocked) { return New-ActionResult 'Winsock et la pile TCP/IP seront réinitialisés (redémarrage requis)' @($section) $findings $changes $blocked }
+    $out1 = & netsh winsock reset 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "netsh winsock reset a échoué : $($out1 -join ' ')" }
+    $log = Join-Path $env:TEMP "sysinfo-ipreset-$(Get-Date -Format yyyyMMddHHmmss).log"
+    $out2 = & netsh int ip reset $log 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "netsh int ip reset a échoué : $($out2 -join ' ')" }
+    New-ActionResult 'Winsock et pile TCP/IP réinitialisés : redémarrer l''ordinateur' @($section) @($findings[0]) $changes $null
+}
+
+# network_set_adapter : désactive ou réactive une carte réseau.
+# Windows : Disable-NetAdapter / Enable-NetAdapter. Linux : nmcli device disconnect / connect (NetworkManager).
+function Set-SINetworkAdapter {
+    param(
+        [Parameter(Mandatory)][string]$Interface,
+        [Parameter(Mandatory)][bool]$Enabled,
+        [switch]$DryRun
+    )
+    $state = if ($Enabled) { 'activée' } else { 'désactivée' }
+    $before = $null; $blocked = $null; $primary = $false
+    if ($IsWindows) {
+        $adapter = Get-NetAdapter -Name $Interface -ErrorAction SilentlyContinue
+        if (-not $adapter) { $adapter = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object InterfaceDescription -eq $Interface | Select-Object -First 1 }
+        if (-not $adapter) { return New-ActionResult "Carte $Interface" @() @() @() "Aucune carte « $Interface » (Get-NetAdapter)." }
+        $name = $adapter.Name
+        $isOn = $adapter.Status -ne 'Disabled'
+        $before = "$($adapter.Status)"
+        $items = [ordered]@{ Carte = $name; Description = $adapter.InterfaceDescription; État = $before; MAC = $adapter.MacAddress }
+    }
+    else {
+        $line = Invoke-Tool nmcli @('-t', '-f', 'DEVICE,TYPE,STATE,CONNECTION', 'device', 'status') | Where-Object { (Split-Nmcli $_)[0] -eq $Interface } | Select-Object -First 1
+        if (-not $line) { return New-ActionResult "Carte $Interface" @() @() @() "Aucune interface « $Interface » gérée par NetworkManager (nmcli device status)." }
+        $f = Split-Nmcli $line
+        $name = $f[0]
+        $isOn = $f[2] -notmatch '^(disconnected|unavailable|unmanaged)'
+        $before = $f[2]
+        $items = [ordered]@{ Interface = $name; Type = $f[1]; État = $f[2]; Connexion = $f[3] }
+        if ($f[2] -eq 'unmanaged') { $blocked = "$name n'est pas gérée par NetworkManager." }
+    }
+    $nic = @(Get-Interfaces) | Where-Object Name -eq $name | Select-Object -First 1
+    $primary = $nic -and (Get-PrimaryInterface @(Get-Interfaces)).Name -eq $name
+    if (-not $blocked -and $isOn -eq $Enabled) { $blocked = "$name est déjà $state." }
+    if (-not $blocked) { $blocked = Get-AdminBlock }
+    $findings = @()
+    if (-not $Enabled -and $primary) { $findings += New-Finding 'warning' 'NET-ADAPTER-PRIMARY' "$name porte la connexion principale : Internet et le réseau local seront coupés jusqu'à sa réactivation." 'Ne pas désactiver la seule carte d''un poste piloté à distance.' }
+    $findings += New-Finding 'info' 'NET-ADAPTER-UNDO' "Réversible : network_set_adapter avec enabled = $(-not $Enabled)." $null
+    $section = [PSCustomObject]@{ Title = 'Carte réseau'; Type = 'KeyValue'; Icon = 'plug_connected'; Items = $items }
+    $change = New-Change $name 'État' $before $state
+    if ($DryRun -or $blocked) { return New-ActionResult "$name sera $state" @($section) $findings @($change) $blocked }
+
+    if ($IsWindows) {
+        if ($Enabled) { Enable-NetAdapter -Name $name -Confirm:$false -ErrorAction Stop } else { Disable-NetAdapter -Name $name -Confirm:$false -ErrorAction Stop }
+        $after = "$((Get-NetAdapter -Name $name).Status)"
+    }
+    else {
+        $out = & nmcli -w 30 device $(if ($Enabled) { 'connect' } else { 'disconnect' }) $name 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "nmcli a échoué : $($out -join ' ')" }
+        $after = (Split-Nmcli (Invoke-Tool nmcli @('-t', '-f', 'DEVICE,STATE', 'device', 'status') | Where-Object { (Split-Nmcli $_)[0] -eq $name } | Select-Object -First 1))[1]
+    }
+    $done = New-ActionResult "$name $state ($after)" @($section) @() @(New-Change $name 'État' $before $after) $null
+    $done | Add-Member Undo @{ Function = 'set_adapter'; Parameters = @{ interface = $name; enabled = -not $Enabled } }
+    $done
+}
+
+#endregion
+
+Export-ModuleMember -Function Get-ModuleData, Get-SIPing, Get-SITraceroute, Test-SIPort, Get-SIPathMtu, Get-SIPublicIp, Get-SILanDevices, Resolve-SIDns, Clear-SIDnsCache, Update-SIDhcpLease, Reset-SINetworkStack, Set-SINetworkAdapter

@@ -16,51 +16,107 @@
                 <TextBlock Classes="CardTitle" Text="{Binding Title}" VerticalAlignment="Center" />
             </StackPanel>
 
-            <ItemsControl ItemsSource="{Binding Rows}">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <StackPanel Spacing="{StaticResource Space16}" />
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="vm:UsageRow">
-                        <Grid ColumnDefinitions="220,*,200,104" ColumnSpacing="16"
-                              Classes.Warning="{Binding IsWarning}" Classes.Critical="{Binding IsCritical}">
-                            <StackPanel VerticalAlignment="Center" Spacing="2">
-                                <TextBlock Classes="Value" Text="{Binding Label}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Label}" />
-                                <TextBlock Classes="Caption" Text="{Binding Detail}" IsVisible="{Binding HasDetail}"
-                                           TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Detail}" />
-                            </StackPanel>
+            <StackPanel>
+                <ItemsControl ItemsSource="{Binding Rows}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Spacing="{StaticResource Space16}" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:UsageRow">
+                            <Grid ColumnDefinitions="220,*,200,104" ColumnSpacing="16"
+                                  Classes.Warning="{Binding IsWarning}" Classes.Critical="{Binding IsCritical}">
+                                <StackPanel VerticalAlignment="Center" Spacing="2">
+                                    <TextBlock Classes="Value" Text="{Binding Label}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Label}" />
+                                    <TextBlock Classes="Caption" Text="{Binding Detail}" IsVisible="{Binding HasDetail}"
+                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Detail}" />
+                                </StackPanel>
 
-                            <c:Meter Grid.Column="1" Percent="{Binding Percent}" Radius="4" VerticalAlignment="Center"
-                                     Classes.Warning="{Binding IsWarning}" Classes.Critical="{Binding IsCritical}" />
+                                <c:Meter Grid.Column="1" Percent="{Binding Percent}" Radius="4" VerticalAlignment="Center"
+                                         Classes.Warning="{Binding IsWarning}" Classes.Critical="{Binding IsCritical}" />
 
-                            <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2">
-                                <TextBlock Classes="Value" Text="{Binding ValueText}" HorizontalAlignment="Right" />
-                                <TextBlock Classes="Caption" Text="{Binding Text}" IsVisible="{Binding HasText}"
-                                           HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" />
-                            </StackPanel>
+                                <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2">
+                                    <TextBlock Classes="Value" Text="{Binding ValueText}" HorizontalAlignment="Right" />
+                                    <TextBlock Classes="Caption" Text="{Binding Text}" IsVisible="{Binding HasText}"
+                                               HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
 
-                            <Panel Grid.Column="3" VerticalAlignment="Center" HorizontalAlignment="Right">
-                                <TextBlock Classes="ValueSmall" Text="{Binding PercentText}" IsVisible="{Binding IsNormal}"
-                                           HorizontalAlignment="Right" />
-                                <Border Classes="Badge Warning" IsVisible="{Binding IsWarning}">
-                                    <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space4}">
-                                        <PathIcon Data="{StaticResource Icon.warning}" />
-                                        <TextBlock Classes="Label" Text="{Binding PercentText}" />
-                                    </StackPanel>
-                                </Border>
-                                <Border Classes="Badge Critical" IsVisible="{Binding IsCritical}">
-                                    <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space4}">
-                                        <PathIcon Data="{StaticResource Icon.error_circle}" />
-                                        <TextBlock Classes="Label" Text="{Binding PercentText}" />
-                                    </StackPanel>
-                                </Border>
-                            </Panel>
-                        </Grid>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+                                <Panel Grid.Column="3" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                    <TextBlock Classes="ValueSmall" Text="{Binding PercentText}" IsVisible="{Binding IsNormal}"
+                                               HorizontalAlignment="Right" />
+                                    <Border Classes="Badge Warning" IsVisible="{Binding IsWarning}">
+                                        <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space4}">
+                                            <PathIcon Data="{StaticResource Icon.warning}" />
+                                            <TextBlock Classes="Label" Text="{Binding PercentText}" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Classes="Badge Critical" IsVisible="{Binding IsCritical}">
+                                        <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space4}">
+                                            <PathIcon Data="{StaticResource Icon.error_circle}" />
+                                            <TextBlock Classes="Label" Text="{Binding PercentText}" />
+                                        </StackPanel>
+                                    </Border>
+                                </Panel>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <!-- Suite, dépliée par « Voir plus » -->
+                <c:AnimatedHeight IsCollapsed="{Binding !IsExpanded}">
+                <ItemsControl ItemsSource="{Binding MoreRows}" Margin="0,16,0,0">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Spacing="{StaticResource Space16}" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:UsageRow">
+                            <Grid ColumnDefinitions="220,*,200,104" ColumnSpacing="16"
+                                  Classes.Warning="{Binding IsWarning}" Classes.Critical="{Binding IsCritical}">
+                                <StackPanel VerticalAlignment="Center" Spacing="2">
+                                    <TextBlock Classes="Value" Text="{Binding Label}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Label}" />
+                                    <TextBlock Classes="Caption" Text="{Binding Detail}" IsVisible="{Binding HasDetail}"
+                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Detail}" />
+                                </StackPanel>
+
+                                <c:Meter Grid.Column="1" Percent="{Binding Percent}" Radius="4" VerticalAlignment="Center"
+                                         Classes.Warning="{Binding IsWarning}" Classes.Critical="{Binding IsCritical}" />
+
+                                <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2">
+                                    <TextBlock Classes="Value" Text="{Binding ValueText}" HorizontalAlignment="Right" />
+                                    <TextBlock Classes="Caption" Text="{Binding Text}" IsVisible="{Binding HasText}"
+                                               HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+
+                                <Panel Grid.Column="3" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                    <TextBlock Classes="ValueSmall" Text="{Binding PercentText}" IsVisible="{Binding IsNormal}"
+                                               HorizontalAlignment="Right" />
+                                    <Border Classes="Badge Warning" IsVisible="{Binding IsWarning}">
+                                        <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space4}">
+                                            <PathIcon Data="{StaticResource Icon.warning}" />
+                                            <TextBlock Classes="Label" Text="{Binding PercentText}" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Classes="Badge Critical" IsVisible="{Binding IsCritical}">
+                                        <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space4}">
+                                            <PathIcon Data="{StaticResource Icon.error_circle}" />
+                                            <TextBlock Classes="Label" Text="{Binding PercentText}" />
+                                        </StackPanel>
+                                    </Border>
+                                </Panel>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                </c:AnimatedHeight>
+                <Button Classes="More" Margin="0,12,0,0" Command="{Binding ToggleExpandedCommand}" IsVisible="{Binding CanExpand}">
+                    <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space4}">
+                        <TextBlock Text="{Binding MoreText}" VerticalAlignment="Center" />
+                        <PathIcon Classes="MoreChevron" Classes.Open="{Binding IsExpanded}" Data="{StaticResource Icon.chevron_down}" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
         </StackPanel>
     </Border>
 

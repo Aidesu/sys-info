@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:conv="using:SysInfo.Converters"
+             xmlns:c="using:SysInfo.Controls"
              xmlns:m="using:SysInfo.Models"
              xmlns:vm="using:SysInfo.ViewModels.Sections"
              x:Class="SysInfo.Views.Sections.KeyValueSectionView"
@@ -14,28 +15,62 @@
                           Data="{Binding Icon, Converter={x:Static conv:IconConverter.Instance}}" />
                 <TextBlock Classes="CardTitle" Text="{Binding Title}" VerticalAlignment="Center" />
             </StackPanel>
-            <ItemsControl ItemsSource="{Binding Items}" Grid.IsSharedSizeScope="True">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <StackPanel Spacing="{StaticResource Space8}" />
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="m:KeyValueItem">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" SharedSizeGroup="Key" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Classes="Body" Text="{Binding Key}"
-                                       Foreground="{DynamicResource TextSecondary}"
-                                       Margin="0,0,24,0" />
-                            <SelectableTextBlock Grid.Column="1" Classes="Value"
-                                                 Text="{Binding Value}" TextWrapping="Wrap" />
-                        </Grid>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+            <!-- Libellés alignés sur la plus longue, éléments repliés compris -->
+            <StackPanel Grid.IsSharedSizeScope="True">
+                <ItemsControl ItemsSource="{Binding Items}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Spacing="{StaticResource Space8}" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="m:KeyValueItem">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="Key" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Classes="Body" Text="{Binding Key}"
+                                           Foreground="{DynamicResource TextSecondary}"
+                                           Margin="0,0,24,0" />
+                                <SelectableTextBlock Grid.Column="1" Classes="Value"
+                                                     Text="{Binding Value}" TextWrapping="Wrap" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <!-- Suite de la liste, dépliée par « Voir plus » -->
+                <c:AnimatedHeight IsCollapsed="{Binding !IsExpanded}">
+                    <ItemsControl ItemsSource="{Binding MoreItems}" Margin="0,8,0,0">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Spacing="{StaticResource Space8}" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="m:KeyValueItem">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="Key" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Classes="Body" Text="{Binding Key}"
+                                               Foreground="{DynamicResource TextSecondary}"
+                                               Margin="0,0,24,0" />
+                                    <SelectableTextBlock Grid.Column="1" Classes="Value"
+                                                         Text="{Binding Value}" TextWrapping="Wrap" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </c:AnimatedHeight>
+                <Button Classes="More" Command="{Binding ToggleExpandedCommand}" IsVisible="{Binding CanExpand}">
+                    <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space4}">
+                        <TextBlock Text="{Binding MoreText}" VerticalAlignment="Center" />
+                        <PathIcon Classes="MoreChevron" Classes.Open="{Binding IsExpanded}" Data="{StaticResource Icon.chevron_down}" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
         </StackPanel>
     </Border>
 

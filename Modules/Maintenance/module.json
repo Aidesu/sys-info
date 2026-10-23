@@ -1,0 +1,160 @@
+{
+  "id": "maintenance",
+  "title": "Maintenance",
+  "icon": "checkmark_circle",
+  "order": 80,
+  "refreshSeconds": 300,
+  "platforms": ["windows", "linux"],
+  "requiresAdmin": false,
+  "description": "Maintenance state of this computer: restore points (Windows System Restore; snapper or Timeshift on Linux) and whether one can be created; space that cleanup can free per category (temporary files, thumbnail cache, recycle bin, package or Windows Update cache, old logs or systemd journal); print queue and spooler state. Findings flag missing or old restore points, large reclaimable space and stuck print jobs. The targeted tools check and repair system files, the Windows image and disks, clean up, optimize volumes, reset the print queue, Windows Update or WMI, and schedule a restart.",
+  "functions": [
+    {
+      "name": "verify_system_files",
+      "title": "Vérifier les fichiers système",
+      "command": "Get-SISystemFileCheck",
+      "level": "L",
+      "long": true,
+      "timeoutSeconds": 1800,
+      "description": "Checks the integrity of the operating system files without repairing anything. Windows: sfc /verifyonly (needs administrator rights). Linux: rpm -Va (files whose content changed, configuration files excluded, with their package), debsums -s or pacman -Qkk. Takes several minutes.",
+      "parameters": [
+        { "name": "top", "label": "Nombre max.", "type": "integer", "description": "Maximum number of modified files returned.", "minimum": 1, "maximum": 500, "default": 100 }
+      ]
+    },
+    {
+      "name": "repair_system_files",
+      "title": "Réparer les fichiers système",
+      "command": "Repair-SISystemFiles",
+      "level": "C",
+      "long": true,
+      "timeoutSeconds": 3600,
+      "description": "Repairs the operating system files. Windows: sfc /scannow (10 to 30 min; some files are replaced at the next restart). Linux: reinstalls, from the repositories, the packages whose files (outside configuration) were modified, as found by rpm -V or debsums (dnf reinstall / apt-get install --reinstall). The preview lists what will be done."
+    },
+    {
+      "name": "check_windows_image",
+      "title": "Vérifier l'image Windows",
+      "command": "Get-SIWindowsImageHealth",
+      "level": "L",
+      "long": true,
+      "timeoutSeconds": 3600,
+      "platforms": ["windows"],
+      "description": "Checks the Windows component store with DISM /Online /Cleanup-Image /ScanHealth (needs administrator rights, several minutes): healthy, repairable or not repairable."
+    },
+    {
+      "name": "repair_windows_image",
+      "title": "Réparer l'image Windows",
+      "command": "Repair-SIWindowsImage",
+      "level": "C",
+      "long": true,
+      "timeoutSeconds": 5400,
+      "platforms": ["windows"],
+      "description": "Repairs or cleans the Windows component store with DISM: restore_health (/RestoreHealth, downloads healthy files from Windows Update) or component_cleanup (/StartComponentCleanup, removes superseded components; installed updates can no longer be uninstalled).",
+      "parameters": [
+        { "name": "operation", "label": "Opération", "type": "string", "description": "restore_health or component_cleanup.", "enum": ["restore_health", "component_cleanup"], "default": "restore_health" }
+      ]
+    },
+    {
+      "name": "check_disk",
+      "title": "Vérifier un disque",
+      "command": "Test-SIDisk",
+      "level": "L",
+      "long": true,
+      "timeoutSeconds": 3600,
+      "description": "Checks one volume without unmounting it. Windows: chkdsk <drive> /scan (online scan, needs administrator rights). Linux: Btrfs error counters and, as root, a read-only scrub; ext4 state from its superblock (a full fsck needs the volume offline).",
+      "parameters": [
+        { "name": "volume", "label": "Volume", "type": "string", "description": "Windows drive (C:) or Linux mount point (/home). Default: the system volume." }
+      ]
+    },
+    {
+      "name": "schedule_disk_repair",
+      "title": "Réparer un disque au démarrage",
+      "command": "Set-SIDiskRepair",
+      "level": "C",
+      "platforms": ["windows"],
+      "description": "Marks a Windows volume so that chkdsk /f checks and repairs it at the next restart, before Windows starts (from minutes to over an hour). Use after check_disk found errors.",
+      "parameters": [
+        { "name": "volume", "label": "Volume", "type": "string", "description": "Drive letter (C:). Default: the system drive." }
+      ]
+    },
+    {
+      "name": "cleanup",
+      "title": "Nettoyage",
+      "command": "Clear-SIJunk",
+      "level": "A",
+      "description": "Frees disk space in one category: temp (temporary files older than 1 day on Windows, your own files older than 7 days in /tmp and /var/tmp on Linux), thumbnails (thumbnail cache), recycle (empties the recycle bin: permanent), packages (Windows Update downloads, or dnf / apt / pacman package cache; administrator), logs (old CBS / DISM logs on Windows; systemd journal beyond 500 MiB on Linux; administrator). Files in use are left. The preview gives the size freed.",
+      "parameters": [
+        { "name": "category", "label": "Catégorie", "type": "string", "description": "What to clean.", "enum": ["temp", "thumbnails", "recycle", "packages", "logs"], "required": true }
+      ]
+    },
+    {
+      "name": "create_restore_point",
+      "title": "Créer un point de restauration",
+      "command": "New-SIRestorePoint",
+      "level": "A",
+      "description": "Creates a restore point now (Windows System Restore, at most one per 24 h, the recent one is reused; snapper or Timeshift on Linux). Needs administrator rights. SysInfo also creates one automatically before each critical action.",
+      "parameters": [
+        { "name": "description", "label": "Description", "type": "string", "description": "Short description of the restore point.", "default": "SysInfo" }
+      ]
+    },
+    {
+      "name": "optimize_volume",
+      "title": "Optimiser un volume",
+      "command": "Optimize-SIVolume",
+      "level": "A",
+      "description": "Optimizes one volume: TRIM on an SSD (tells it which blocks are free), defragmentation on a Windows hard disk. Windows: Optimize-Volume; Linux: fstrim. Needs administrator rights.",
+      "parameters": [
+        { "name": "volume", "label": "Volume", "type": "string", "description": "Windows drive (C:) or Linux mount point. Default: the system volume." }
+      ]
+    },
+    {
+      "name": "reset_print_queue",
+      "title": "Vider la file d'impression",
+      "command": "Reset-SIPrintSpooler",
+      "level": "A",
+      "description": "Cancels the pending print jobs and restarts the print spooler, to unblock a stuck printer. Windows: stops the Spooler, deletes spool\\PRINTERS, restarts it (administrator). Linux: cancel -a (all jobs as root, else your own) and restarts CUPS as root. The preview lists the jobs that will be cancelled."
+    },
+    {
+      "name": "rebuild_icon_cache",
+      "title": "Reconstruire le cache d'icônes",
+      "command": "Reset-SIIconCache",
+      "level": "A",
+      "platforms": ["windows"],
+      "description": "Fixes blank or wrong icons: deletes the Windows icon cache and restarts Explorer (its windows close; the desktop and taskbar disappear for a few seconds)."
+    },
+    {
+      "name": "repair_windows_update",
+      "title": "Réparer Windows Update",
+      "command": "Reset-SIWindowsUpdate",
+      "level": "C",
+      "platforms": ["windows"],
+      "description": "Resets the Windows Update cache when updates keep failing: stops wuauserv, BITS, cryptsvc and msiserver, renames SoftwareDistribution and catroot2 (kept as .old-<date>), restarts the services. The update history shown by Windows Update is lost; installed updates stay."
+    },
+    {
+      "name": "check_wmi",
+      "title": "Vérifier WMI",
+      "command": "Test-SIWmiRepository",
+      "level": "L",
+      "platforms": ["windows"],
+      "description": "Checks the consistency of the WMI repository (winmgmt /verifyrepository, administrator). An inconsistent repository breaks inventory, antivirus status and admin tools."
+    },
+    {
+      "name": "repair_wmi",
+      "title": "Réparer WMI",
+      "command": "Repair-SIWmiRepository",
+      "level": "C",
+      "platforms": ["windows"],
+      "description": "Rebuilds the WMI repository keeping what is readable (winmgmt /salvagerepository). Use only when check_wmi reports it inconsistent."
+    },
+    {
+      "name": "schedule_restart",
+      "title": "Redémarrage planifié",
+      "command": "Set-SIRestart",
+      "level": "C",
+      "restorePoint": false,
+      "description": "Schedules a restart of this computer in N minutes (Windows: shutdown /r /t, with a notice to users; Linux: shutdown -r +N, root), or cancels the scheduled one with cancel = true. Unsaved work is lost at restart.",
+      "parameters": [
+        { "name": "minutes", "label": "Dans (minutes)", "type": "integer", "description": "Delay before the restart.", "minimum": 1, "maximum": 1440, "default": 10 },
+        { "name": "cancel", "label": "Annuler", "type": "boolean", "description": "Cancel the scheduled restart instead.", "default": false }
+      ]
+    }
+  ]
+}

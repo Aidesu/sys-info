@@ -20,15 +20,14 @@ public partial class ModuleTabViewModel : NavPageViewModel, IDisposable
 {
     private readonly LoadedModule _module;
     private readonly DispatcherTimer? _timer;
-    private PowerShellService? _powerShell;
-    // The Outils card runs in its own runspace: a 30 s analysis must not stall the page's refresh.
-    private PowerShellService? _toolsPowerShell;
-    private readonly System.Threading.SemaphoreSlim _toolsInit = new(1, 1);
+    // Page refresh, Outils card and long tasks each have their own runspace: a 30 s analysis never stalls the page.
+    private readonly ModuleRunner _runner;
     private bool _started;
 
     public ModuleTabViewModel(LoadedModule module)
     {
         _module = module;
+        _runner = new ModuleRunner(module);
 
         if (module.Manifest.RefreshSeconds > 0)
         {
@@ -36,10 +35,10 @@ public partial class ModuleTabViewModel : NavPageViewModel, IDisposable
             _timer.Tick += (_, _) => { if (!IsBusy) RefreshCommand.Execute(null); };
         }
 
-        // Read-only functions only; actions (levels A and C) wait for the confirmation framework (sprint S4).
+        // Reads and actions (A and C, confirmed in a window); X functions are UI-only and have no generic card.
         Tools = module.Functions
-            .Where(f => f.Level == AccessLevel.L)
-            .Select(f => new FunctionToolViewModel(f, InvokeToolAsync))
+            .Where(f => f.Level != AccessLevel.X)
+            .Select(f => new FunctionToolViewModel(f, _runner))
             .ToList();
     }
 
@@ -48,22 +47,15 @@ public partial class ModuleTabViewModel : NavPageViewModel, IDisposable
 
     public bool HasTools => Tools.Count > 0;
 
-    private async Task<System.Management.Automation.PSObject> InvokeToolAsync(string command, IReadOnlyDictionary<string, object?> arguments)
-    {
-        if ((_module.Manifest.RequiresAdmin || _module.Functions.Any(f => f.Command == command && f.RequiresAdmin)) && !Environment.IsPrivilegedProcess)
-            throw new InvalidOperationException("Relancez SysInfo en administrateur (root sous Linux) pour utiliser cet outil.");
+    /// <summary>Tools that only read (L), listed first in the Outils card.</summary>
+    public IReadOnlyList<FunctionToolViewModel> ReadTools => [.. Tools.Where(t => !t.IsAction)];
 
-        await _toolsInit.WaitAsync();
-        try
-        {
-            _toolsPowerShell ??= await Task.Run(() => new PowerShellService(_module.ScriptPath));
-        }
-        finally
-        {
-            _toolsInit.Release();
-        }
-        return await _toolsPowerShell.InvokeAsync(command, arguments);
-    }
+    /// <summary>Actions (A, C), under their own heading.</summary>
+    public IReadOnlyList<FunctionToolViewModel> ActionTools => [.. Tools.Where(t => t.IsAction)];
+
+    public bool HasReadTools => ReadTools.Count > 0;
+
+    public bool HasActionTools => ActionTools.Count > 0;
 
     public string Id => _module.Manifest.Id;
     public override string Title => _module.Manifest.Title;
@@ -123,6 +115,9 @@ public partial class ModuleTabViewModel : NavPageViewModel, IDisposable
 
     public bool HasFindings => Findings.Count > 0;
 
+    /// <summary>Findings on screen: kept between refreshes to animate those that appear or leave.</summary>
+    public FindingListViewModel FindingList { get; } = new();
+
     /// <summary>Optional subtitle from the module, shown after the page title ("wlp4s0 · 192.168.1.42").</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSubtitle))]
@@ -181,8 +176,42 @@ public partial class ModuleTabViewModel : NavPageViewModel, IDisposable
 
     partial void OnIsPausedChanged(bool value) => UpdateTimer();
 
+    /// <summary>
+    /// Saves resources (Settings, on by default): while its page is not shown, the module refreshes less often
+    /// (<see cref="HiddenInterval"/>); its tab state and chart history keep going. Opening the page refreshes it at once.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool EcoMode { get; set; } = true;
+
+    partial void OnEcoModeChanged(bool value) => UpdateTimer();
+
+    /// <summary>Hidden page: 5 × the module's rhythm, at least its rhythm, at most a minute (2 s → 10 s, 10 s → 50 s, 60 s → 60 s).</summary>
+    private TimeSpan HiddenInterval
+    {
+        get
+        {
+            var seconds = _module.Manifest.RefreshSeconds;
+            return TimeSpan.FromSeconds(Math.Max(seconds, Math.Min(seconds * 5, 60)));
+        }
+    }
+
+    protected override void OnActiveChanged(bool isActive)
+    {
+        UpdateTimer();
+        // Back on screen after a slower rhythm: fresh data now rather than at the next tick.
+        if (isActive && _started && EcoMode && !IsBusy && LastUpdated is { } at
+            && DateTime.Now - at > TimeSpan.FromSeconds(_module.Manifest.RefreshSeconds))
+            RefreshCommand.Execute(null);
+    }
+
     private void UpdateTimer()
     {
+        if (_timer is not null)
+        {
+            var interval = EcoMode && !IsActive ? HiddenInterval : TimeSpan.FromSeconds(_module.Manifest.RefreshSeconds);
+            if (_timer.Interval != interval)
+                _timer.Interval = interval;
+        }
         if (_started && !IsPaused)
             _timer?.Start();
         else
@@ -202,9 +231,12 @@ public partial class ModuleTabViewModel : NavPageViewModel, IDisposable
         IsBusy = true;
         try
         {
-            _powerShell ??= await Task.Run(() => new PowerShellService(_module.ScriptPath));
-            var data = await _powerShell.GetModuleDataAsync();
+            var (data, _) = await _runner.InvokeAsync(null);
             Findings = SectionParser.ParseFindings(data);
+            // Animated only when the page is on screen and already showed data: not at first load, not in the
+            // background (opening the page then shows the current state at once).
+            FindingList.Animate = IsActive && LastUpdated is not null;
+            FindingList.Update(Findings);
             ApplySections(SectionParser.Parse(data));
             Subtitle = SectionParser.ParseSubtitle(data);
             ErrorMessage = null;
@@ -246,6 +278,10 @@ public partial class ModuleTabViewModel : NavPageViewModel, IDisposable
                 .ToList();
         }
 
+        // Charts are laid out by time over the module's normal rhythm (samples are sparser while the page is hidden).
+        foreach (var metric in Sections.OfType<MetricSectionViewModel>())
+            metric.ChartWindow = TimeSpan.FromSeconds(_module.Manifest.RefreshSeconds * (MetricSectionViewModel.HistoryLength - 1));
+
         // The tab carries the worst state of its Metric / Usage thresholds and of its findings.
         Status = Sections.Select(s => s.Status)
             .Concat(Findings.Select(f => f.Status))
@@ -256,8 +292,6 @@ public partial class ModuleTabViewModel : NavPageViewModel, IDisposable
     public void Dispose()
     {
         _timer?.Stop();
-        _powerShell?.Dispose();
-        _toolsPowerShell?.Dispose();
-        _toolsInit.Dispose();
+        _runner.Dispose();
     }
 }

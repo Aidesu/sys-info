@@ -1,11 +1,23 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:SysInfo.ViewModels.Tools"
+             xmlns:c="using:SysInfo.Controls"
              x:Class="SysInfo.Views.Tools.FunctionToolView"
              x:DataType="vm:FunctionToolViewModel">
 
-    <!-- Un outil : formulaire généré depuis module.json, bouton Exécuter, puis constats et sections du résultat -->
-    <Expander Header="{Binding Title}" IsExpanded="{Binding IsExpanded}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+    <!-- Un outil : formulaire généré depuis module.json, bouton Exécuter (Simuler et confirmation pour une action),
+         Arrêter pendant l'exécution, puis constats et sections du résultat -->
+    <Expander IsExpanded="{Binding IsExpanded}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+        <Expander.Header>
+            <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space8}">
+                <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
+                <Border Classes="Badge Warning" Classes.Critical="{Binding IsCritical}" IsVisible="{Binding IsAction}">
+                    <TextBlock Classes="Caption" Text="{Binding Tag}" />
+                </Border>
+                <TextBlock Classes="Caption" Text="{Binding Tag}" VerticalAlignment="Center"
+                           IsVisible="{Binding !IsAction}" />
+            </StackPanel>
+        </Expander.Header>
         <StackPanel Spacing="{StaticResource Space12}">
 
             <ItemsControl ItemsSource="{Binding Parameters}" IsVisible="{Binding HasParameters}">
@@ -35,7 +47,10 @@
             </ItemsControl>
 
             <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space12}">
-                <Button Classes="Primary" Content="Exécuter" Command="{Binding RunCommand}" />
+                <Button Content="Simuler" Command="{Binding PreviewCommand}" IsVisible="{Binding IsAction}"
+                        ToolTip.Tip="Montre ce que l'action changerait, sans rien modifier" />
+                <Button Classes="Primary" Content="{Binding RunLabel}" Command="{Binding RunCommand}" />
+                <Button Classes="Ghost" Content="Arrêter" Command="{Binding CancelCommand}" IsVisible="{Binding IsRunning}" />
                 <TextBlock Classes="Caption" Text="{Binding Status}" IsVisible="{Binding HasStatus}"
                            VerticalAlignment="Center" TextWrapping="Wrap" />
             </StackPanel>
@@ -45,6 +60,9 @@
                 <SelectableTextBlock Classes="Body" Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
             </StackPanel>
 
+            <!-- Résultat : déplié en douceur quand il arrive ou change de taille -->
+            <c:AnimatedHeight>
+            <StackPanel Spacing="{StaticResource Space12}">
             <ItemsControl ItemsSource="{Binding Findings}" IsVisible="{Binding HasFindings}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
@@ -60,6 +78,8 @@
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
             </ItemsControl>
+            </StackPanel>
+            </c:AnimatedHeight>
         </StackPanel>
     </Expander>
 

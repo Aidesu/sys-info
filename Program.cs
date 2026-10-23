@@ -17,6 +17,14 @@ sealed class Program
         if (args.Contains("--mcp"))
             return Mcp.McpServerHost.RunAsync().GetAwaiter().GetResult();
 
+        // `SysInfo --confirm <request.json>`: confirmation window of an action asked by the MCP server.
+        var confirm = Array.IndexOf(args, "--confirm");
+        if (confirm >= 0)
+        {
+            App.ConfirmRequestPath = args.ElementAtOrDefault(confirm + 1) ?? string.Empty;
+            return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args, Avalonia.Controls.ShutdownMode.OnExplicitShutdown);
+        }
+
         return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 

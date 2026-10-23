@@ -9,6 +9,10 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        if (Services.MotionPreference.ReduceMotion)
+            PageHost.PageTransition = null;
+        // Middle click: auto-scroll, as in a browser.
+        Controls.AutoScroll.Attach(this);
     }
 
     // Tells the view model when the window is minimized (Settings › Pause when minimized).

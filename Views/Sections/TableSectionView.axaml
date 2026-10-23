@@ -9,6 +9,11 @@
     <Border Classes="Card Flush">
         <StackPanel>
             <DockPanel Margin="16,16,16,12">
+                <!-- Colonnes affichées (même menu qu'un clic droit sur l'en-tête) -->
+                <Button DockPanel.Dock="Right" Classes="Ghost Small Icon" Click="OnColumnsClick" Margin="8,0,0,0"
+                        ToolTip.Tip="Colonnes" AutomationProperties.Name="Colonnes affichées">
+                    <PathIcon Width="14" Height="14" Data="{StaticResource Icon.settings}" />
+                </Button>
                 <TextBlock DockPanel.Dock="Right" Classes="Caption" Text="{Binding CountText}" VerticalAlignment="Center" />
                 <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space8}">
                     <PathIcon Classes="CardIcon" IsVisible="{Binding HasIcon}"
@@ -20,6 +25,12 @@
             <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                 <Grid Name="TableGrid" />
             </ScrollViewer>
+            <Button Classes="More" Margin="8,4,8,8" Command="{Binding ToggleExpandedCommand}" IsVisible="{Binding CanExpand}">
+                <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space4}">
+                    <TextBlock Text="{Binding MoreText}" VerticalAlignment="Center" />
+                    <PathIcon Classes="MoreChevron" Classes.Open="{Binding IsExpanded}" Data="{StaticResource Icon.chevron_down}" />
+                </StackPanel>
+            </Button>
         </StackPanel>
     </Border>
 

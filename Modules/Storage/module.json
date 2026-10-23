@@ -16,6 +16,7 @@
       "title": "Analyse de l'espace",
       "command": "Get-SISpaceUsage",
       "level": "L",
+      "long": true,
       "description": "Analyzes disk space under a folder of this computer: the largest subfolders one level down (cumulative size, file count, share) and the largest files anywhere below. Use it to find what fills a disk. Skips virtual and network file systems; stops at the timeout and says the result is partial. Can take tens of seconds on a large folder.",
       "parameters": [
         {

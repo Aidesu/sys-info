@@ -33,21 +33,27 @@
 
 ```
 SysInfo/
-├─ Program.cs, App.axaml           → démarrage, thème global
+├─ Program.cs, App.axaml           → démarrage, thème global ; `--mcp` serveur, `--confirm` fenêtre de confirmation
+├─ ConfirmLauncher.cs              → `SysInfo --confirm <demande>` : confirmation d'une action demandée en MCP
 ├─ Views/
 │   ├─ MainWindow.axaml            → barre latérale + zone de contenu
+│   ├─ ConfirmWindow.axaml         → confirmation d'une action (aperçu, paramètres, Refuser / Exécuter)
 │   └─ Sections/                   → rendus génériques (KeyValue, Table, Metric)
 ├─ ViewModels/
 │   ├─ MainWindowViewModel.cs      → liste des onglets, onglet actif
+│   ├─ Activity/                   → page Activité : tâches en cours (journal en direct), historique
 │   └─ ModuleTabViewModel.cs       → un onglet = un module (données, rafraîchissement)
 ├─ Services/
-│   ├─ PowerShellService.cs        → exécution PowerShell (runspace réutilisé)
+│   ├─ PowerShellService.cs        → exécution PowerShell (runspace réutilisé, annulation, délai)
+│   ├─ ModuleRunner.cs             → trois runspaces par module : vue d'ensemble, fonctions, tâches longues
+│   ├─ AuditLog.cs                 → journal d'audit JSONL (§4.5)
+│   ├─ RestorePoints.cs            → point de restauration avant une action critique (module Maintenance)
 │   └─ ModuleLoader.cs             → découverte et chargement des modules
 ├─ Models/
 │   ├─ ModuleManifest.cs           → lecture de module.json (fonctions, paramètres, niveaux)
 │   ├─ Section.cs                  → types de sections affichables
 │   └─ Finding.cs                  → constats normalisés (§4.3)
-├─ Mcp/                            → serveur MCP (`SysInfo --mcp`) : outils, enveloppe, descriptions
+├─ Mcp/                            → serveur MCP (`SysInfo --mcp`) : outils, enveloppe, descriptions, confirmation, tâches longues
 ├─ Modules/                        → UN DOSSIER PAR MODULE
 │   ├─ CPU/
 │   │   ├─ module.json
@@ -175,7 +181,7 @@ Findings = @(
 )
 ```
 
-- Un **code ne change jamais** une fois publié : l'IA agrège et priorise par code. Préfixe = module (`SYS`, `HW`, `NET`, `STO`, `EVT`, `SVC`, `SEC`…).
+- Un **code ne change jamais** une fois publié : l'IA agrège et priorise par code. Préfixe = module (`SYS`, `HW`, `NET`, `STO`, `EVT`, `SVC`, `SEC`, `SW`, `MNT`, `AUD`…).
 - Textes en français, déjà rédigés. Un constat par objet concerné (un par volume, un par disque).
 - Affichage : carte « Constats » en tête de page, les plus graves d'abord ; `warning` / `critical` remontent sur l'onglet (avec les seuils des Metric et Usage). `info` ne colore rien.
 - MCP : `status` de l'enveloppe = constat le plus grave (`ok`, `warning`, `critical`).
@@ -212,14 +218,17 @@ Findings = @(
 | `name` | snake_case ; outil MCP `<id>_<name>` (ex. `system_get_processes`) |
 | `title` | facultatif, **en français** : nom de l'outil dans la carte « Outils » de la fenêtre (à défaut, `name`) |
 | `command` | fonction PowerShell du `.psm1`, nommée `<Verbe>-SI<Nom>` (ex. `Get-SIProcesses`), exportée |
-| `level` | `L` lecture · `A` action réversible · `C` action critique · `X` jamais en MCP. **Seul `L` est exposé pour l'instant** (A/C : sprint S4, avec confirmation dans l'UI et audit) |
+| `level` | `L` lecture · `A` action réversible · `C` action critique · `X` jamais en MCP. `A` et `C` : aperçu, confirmation, audit (§4.5) ; `C` exige en plus l'administrateur et un point de restauration, et n'est exposé en MCP que si l'utilisateur l'a activé |
 | `description` | en anglais, obligatoire : ce que renvoie la fonction et quand l'utiliser |
 | `platforms` | facultatif, sous-ensemble de ceux du module ; vide = ceux du module |
 | `requiresAdmin` | facultatif ; refus explicite (erreur MCP) si l'app n'est pas élevée |
 | `dependencies` | facultatif : outils externes utilisés s'ils sont présents (`smartctl`, `nvidia-smi`…). Absent → la fonction marche quand même et renvoie un constat `info` « installer X pour activer » |
+| `long` | facultatif (2026-10-23, S4a) : tâche longue (analyse, scan…). Runspace dédié « jobs », bouton « Arrêter » dans la fenêtre ; en MCP, au-delà de 25 s l'outil renvoie un `jobId` (suivi : `job_status`, arrêt : `job_cancel`) |
+| `timeoutSeconds` | facultatif (S4a) : arrêt forcé après ce délai ; défaut 1 h pour une tâche longue, aucun sinon |
+| `restorePoint` | facultatif (S4b), actions `C` : `false` pour ne pas créer de point de restauration avant (redémarrage planifié…) ; défaut `true` |
 | `parameters` | `name` (camelCase = paramètre PowerShell), `label` (en français, libellé du formulaire), `type` (`string`, `integer`, `number`, `boolean`), `description`, `required`, `enum` (string), `minimum` / `maximum`, `default` (documentaire : la fonction PowerShell applique sa propre valeur par défaut) |
 
-Affichage : chaque fonction `L` apparaît dans la carte **« Outils »** en bas de la page du module : formulaire généré depuis `parameters` (texte, nombre, case à cocher, liste), bouton « Exécuter », puis constats et sections du résultat avec les rendus habituels. Les outils tournent dans un runspace à part : une analyse longue ne bloque pas le rafraîchissement de la page.
+Affichage : chaque fonction `L` ou `A` apparaît dans la carte **« Outils »** en bas de la page du module : formulaire généré depuis `parameters` (texte, nombre, case à cocher, liste), bouton « Exécuter », puis constats et sections du résultat avec les rendus habituels. Les outils tournent dans un runspace à part : une analyse longue ne bloque pas le rafraîchissement de la page.
 
 Règles :
 
@@ -227,7 +236,35 @@ Règles :
 - Volume limité par défaut : `top`, `since`, `filter`… pour ne pas noyer le contexte de l'IA.
 - Les arguments sont vérifiés côté C# (type, `enum`, bornes, argument inconnu) avant l'appel ; garder aussi `ValidateRange` / `ValidateSet` côté PowerShell.
 - Une fonction invalide (nom, commande absente du `.psm1`, paramètre mal décrit) est ignorée et signalée ; le module et ses autres fonctions se chargent.
+- **Suivi en direct** (ajouté le 2026-10-23) : une fonction longue ou une action raconte ce qu'elle fait avec `Write-Information "rpm -V … sur 2 300 paquets"` (une ligne du journal en direct) et `Write-Progress -Activity 'Vérification des paquets' -Status '450 / 2 300' -PercentComplete 19` (étape et barre de progression). La page **Activité** les affiche pendant l'exécution, avec la commande lancée ; `Write-Warning` et les erreurs y apparaissent aussi. Rien de cela ne remplace le retour (`Sections`, `Findings`) ; pas de `Write-Host`. Les commandes externes longues (sfc, DISM, dnf…) passent leur sortie ligne à ligne (`… | ForEach-Object { Write-Information "$_"; "$_" }`).
 - **Jamais exposé, même en L** : clés BitLocker / de récupération, mots de passe (Wi-Fi, LAPS…), clés de licence complètes, hashes, contenu des fichiers utilisateurs, historique de navigation. Masquer les secrets évidents des lignes de commande.
+
+### 4.6 Assistants de l'hôte et sobriété (ajouté le 2026-10-23)
+
+- SysInfo fournit des classes .NET aux modules (`Native/` : `SysInfo.Native.ProcessSampler`, `SysInfo.Native.CpuSampler`, `SysInfo.Storage.DirectorySizer`) pour les boucles coûteuses. Le module teste leur présence (`'Type' -as [type]`) et garde un repli PowerShell pour fonctionner seul dans `pwsh`.
+- Pas d'`Add-Type` au chargement d'un module (charge le compilateur, ~70 Mio) ; pas de requête WMI à chaque rafraîchissement court sous Windows (mettre en cache 60 s).
+- Une section dont les données sont en cache est elle aussi mise en cache (pas de tableau reconstruit toutes les 2 s) ; un résultat identique peut être réutilisé tel quel.
+- Pages masquées : rafraîchies 5 fois moins souvent (60 s au plus), réglage « Économiser les ressources ».
+
+### 4.5 Actions (niveaux A et C, ajouté le 2026-10-23, sprints S4a et S4b)
+
+Une action modifie le système (arrêter un processus, redémarrer un service, vider le cache DNS…). Elle se déclare comme une fonction ciblée avec `"level": "A"` et respecte en plus :
+
+- **`[switch]$DryRun` obligatoire** (sinon la fonction est ignorée au chargement) : avec `-DryRun`, rien n'est modifié ; la fonction renvoie son **aperçu** : `Subtitle` (« cups.service sera redémarré »), état actuel en `Sections`, avertissements en `Findings`, changements prévus en `Changes`.
+- **`Changes`** (à côté de `Sections`) : `@( @{ Target = 'cups.service'; Property = 'État'; Before = 'En cours'; After = 'Arrêté' } )`, prévus en aperçu, réels après exécution. Affichés en tableau « Modifications », écrits dans le journal d'audit, renvoyés au MCP (`changes`).
+- **`Blocked`** (texte, facultatif) : pourquoi l'action est impossible (droits, cible introuvable, service essentiel, déjà dans l'état demandé). Rien n'est tenté ; en MCP l'utilisateur n'est même pas sollicité. Une action ne doit jamais se lancer à moitié : tout ce qui peut se vérifier avant se vérifie dans l'aperçu.
+- **`Undo`** (facultatif, S4b) : `@{ Function = 'control'; Parameters = @{ name = 'cups'; action = 'start' } }`, fonction du même module qui défait l'action. Écrit dans l'audit (`undo`), renvoyé au MCP, rejoué par `audit_undo` (seulement si cette fonction est de niveau A).
+- **Niveau C** (S4b) : droits administrateur exigés pour l'exécution (l'aperçu reste possible sans) ; avant l'exécution, SysInfo crée un point de restauration avec `New-SIRestorePoint` du module Maintenance (Windows : Restauration du système ; Linux : snapper ou Timeshift) ; s'il est impossible, la fenêtre le dit et l'utilisateur décide ; s'il échoue alors qu'il était possible, l'action n'est pas lancée. La fenêtre de confirmation demande en plus de cocher « J'ai lu l'aperçu ».
+- Le nom de paramètre `dryRun` est réservé. Pas de `Read-Host` ni de confirmation PowerShell : la confirmation est faite par SysInfo.
+- Garde-fous propres au module : liste de processus / services essentiels jamais touchés, chemins d'écriture fixés (ex. exports dans `Documents/SysInfo/Exports`, jamais écrasés).
+
+Déroulé :
+
+- **Fenêtre** : carte « Outils », boutons « Simuler » (aperçu seul) et « Exécuter… » : fenêtre de confirmation (aperçu, paramètres, « Refuser » par défaut), puis exécution.
+- **MCP** : l'outil `<id>_<name>` a un argument `dryRun` en plus. Sans lui : aperçu ; si `Blocked`, erreur sans rien demander ; sinon le serveur lance `SysInfo --confirm <demande>`, petite fenêtre SysInfo qui recalcule l'aperçu et attend la réponse (refus automatique après 2 min). Il faut une session graphique. Refus, délai ou fenêtre impossible → erreur d'outil, rien n'est modifié.
+- **Audit** : chaque appel MCP, chaque exécution de la carte « Outils » et chaque action (aperçu, confirmation, refus, résultat) donne une ligne JSONL dans `%LOCALAPPDATA%\SysInfo\audit` / `~/.local/share/SysInfo/audit` (`audit-AAAA-MM.jsonl` : heure, origine `ui` / `mcp`, client MCP, compte, élévation, outil, niveau, paramètres, `dryRun`, confirmation, statut, durée, codes des constats, `changes`, `jobId`, erreur). Le rafraîchissement automatique des pages n'est pas journalisé. Rétention : 365 jours (`auditRetentionDays` dans `settings.json`).
+- **Paramètres** : « Actions demandées par les agents IA » (`mcpActions`, A, activé par défaut), « Actions critiques » (`mcpCriticalActions`, C, **désactivé par défaut**), liste blanche par outil (`mcpDisabledTools`). Tout reste disponible dans la fenêtre.
+- **Elevation sous Linux** : `sudo --preserve-env=DISPLAY,WAYLAND_DISPLAY,XAUTHORITY,XDG_RUNTIME_DIR SysInfo --mcp`, sinon la fenêtre de confirmation ne peut pas s'ouvrir ; root a alors ses propres `settings.json` et journal d'audit.
 
 ---
 
@@ -246,10 +283,15 @@ Règles :
 ## 6. Interface
 
 - Disposition type Gestionnaire des tâches : **barre latérale** d'onglets à gauche, contenu à droite.
+- **Activité** (au-dessus de Paramètres) : ce qui tourne (outils de la carte « Outils » avec journal en direct, progression, bouton Arrêter ; tâches longues d'un agent IA lues dans le journal d'audit) et l'historique (journal d'audit, fenêtre et MCP, 200 dernières entrées, détail dépliable avec le journal en direct des exécutions de la session). Pastille avec le nombre de tâches en cours sur l'entrée de la barre. Le rafraîchissement automatique des pages n'y figure pas.
 - Design **sobre et soigné** : peu de couleurs, une couleur d'accent, typographie nette, espacements cohérents.
 - Éviter l'esthétique générique « template » : pas de dégradés gratuits, pas d'ombres partout, pas d'icônes décoratives inutiles.
 - Thème clair et sombre.
 - Les graphiques `Metric` gardent un historique court (ex. 60 points).
+- **Listes longues** (2026-10-23) : un tableau montre 10 lignes (après tri), une liste clé → valeur 10 éléments, des jauges 6 lignes (celles en Attention / Critique restent toujours visibles), les constats les 3 plus graves ; le reste se déplie avec « Voir les N autres » (seulement s'il en reste plus de 1 ou 2). Rien à faire côté module : tout renvoyer, l'interface replie.
+- **Tableaux personnalisables** (2026-10-23) : glisser le bord d'un en-tête redimensionne la colonne (double-clic : largeur automatique) ; clic droit sur l'en-tête ou bouton ⚙ de la carte : afficher / masquer des colonnes, réinitialiser. Disposition gardée dans `settings.json` (`tableLayouts`), par titre et colonnes du tableau : un module n'a rien à faire, mais changer les libellés de colonnes repart de la disposition par défaut.
+- **Défilement au clic molette** (2026-10-23) : comme dans un navigateur (`Controls/AutoScroll`), vertical et horizontal ; clic simple = mode maintenu jusqu'au clic suivant ou Échap, clic-glisser = arrêt au relâchement.
+- **Animations** (2026-10-23) : `Controls/AnimatedHeight` fait glisser les changements de hauteur (constat qui apparaît ou disparaît, « Voir plus », tableau qui grandit) au lieu de faire sauter la page ; fondu à l'arrivée des données et entre les pages. Courtes (150 à 260 ms), jamais en boucle ; toutes coupées si l'OS demande moins d'animations (`MotionPreference`). Un constat n'est animé que si la page est affichée au moment où il change.
 
 ---
 

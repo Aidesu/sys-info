@@ -198,7 +198,17 @@ function Get-StaticInfo {
 #region Mesures
 
 # Utilisation CPU, en % : globale (Total) et par processeur logique (Cores, dans l'ordre).
+# Dans SysInfo, [SysInfo.Native.CpuSampler] lit le noyau directement (sans WMI ni boucle PowerShell) ; seul dans pwsh,
+# le module retombe sur CIM (Windows) ou /proc/stat lu en PowerShell (Linux).
+$script:CpuSampler = if ('SysInfo.Native.CpuSampler' -as [type]) { [SysInfo.Native.CpuSampler]::new() } else { $null }
+
 function Get-CpuUsage {
+    if ($script:CpuSampler) {
+        $sample = $script:CpuSampler.Sample()
+        # Premier relevé : point de départ, comme $script:PrevCpu dans la version PowerShell.
+        if ($null -eq $sample.Total) { $script:PrevCpu = $true }
+        return [PSCustomObject]@{ Total = $sample.Total; Cores = @($sample.Cores) }
+    }
     if ($IsWindows) {
         $all = @(Get-CimInstance -ClassName Win32_PerfFormattedData_PerfOS_Processor)
         $total = $all | Where-Object Name -eq '_Total'
@@ -232,6 +242,7 @@ function Get-CpuUsage {
 
 # Fréquence actuelle moyenne, en GHz (Linux : cpufreq de chaque cœur ; Windows : Win32_Processor).
 function Get-CpuFrequency {
+    if ($script:CpuSampler) { return [SysInfo.Native.CpuSampler]::FrequencyGHz() }
     if ($IsWindows) {
         return (Get-CimInstance -ClassName Win32_Processor | Select-Object -First 1).CurrentClockSpeed / 1000
     }
@@ -286,7 +297,16 @@ function Get-MemoryInfo {
 }
 
 # Processus : nombre total et les 15 plus gourmands (CPU % depuis l'appel précédent, puis mémoire).
+# Dans SysInfo, la classe [SysInfo.Native.ProcessSampler] de l'application fait le relevé (~3 ms au lieu de ~60 ms) ;
+# seul dans pwsh, le module retombe sur Get-Process.
+$script:Sampler = if ('SysInfo.Native.ProcessSampler' -as [type]) { [SysInfo.Native.ProcessSampler]::new() } else { $null }
+
 function Get-ProcessSnapshot {
+    if ($script:Sampler) {
+        $all = $script:Sampler.Sample()
+        $script:PrevProc = $true   # un relevé de départ existe (voir Get-ProcessSnapshotReady)
+        return [PSCustomObject]@{ Count = $all.Count; All = $all; Top = $all[0..([Math]::Min(15, $all.Count) - 1)] }
+    }
     $now = [DateTime]::UtcNow
     $processes = Get-Process
     $cpuTimes = @{}
@@ -378,6 +398,22 @@ function Get-RegionInfo {
 # Fin du démarrage précédent : arrêt propre ou inattendu, avec sa date.
 # Windows : dernier événement System 6006 (arrêt propre), 6008 (arrêt inattendu) ou 41 Kernel-Power, avant le démarrage actuel.
 # Linux   : dernières lignes du journal du démarrage précédent ; « Journal stopped » = journald arrêté proprement.
+# Ce que consomme le processus qui exécute le module (SysInfo, ou pwsh quand le module est testé seul) : CPU moyen
+# depuis l'appel précédent et mémoire. Affiché pour savoir ce que l'outil pèse sur les mesures.
+$script:SelfPrev = $null
+function Get-SelfUsage {
+    $me = [System.Diagnostics.Process]::GetCurrentProcess()
+    $now = [DateTime]::UtcNow
+    $cpu = $me.TotalProcessorTime.TotalMilliseconds
+    $percent = $null
+    if ($script:SelfPrev) {
+        $elapsed = ($now - $script:SelfPrev.At).TotalMilliseconds
+        if ($elapsed -gt 0) { $percent = [Math]::Round(100 * ($cpu - $script:SelfPrev.Cpu) / $elapsed / [Environment]::ProcessorCount, 2) }
+    }
+    $script:SelfPrev = @{ At = $now; Cpu = $cpu }
+    [PSCustomObject]@{ Name = $me.ProcessName; Percent = $percent; Memory = $me.WorkingSet64 }
+}
+
 function Get-LastShutdown([datetime]$BootTime) {
     if ($IsWindows) {
         $events = Get-WinEvent -FilterHashtable @{ LogName = 'System'; Id = 6006, 6008, 41; EndTime = $BootTime } -MaxEvents 1 -ErrorAction SilentlyContinue
@@ -401,26 +437,32 @@ function Get-Temperatures {
 
     if ($IsLinux) {
         # /sys/class/hwmon/hwmon*/ : name, temp<N>_input (millidegrés), temp<N>_label facultatif.
-        foreach ($hwmon in Get-ChildItem -Path /sys/class/hwmon -ErrorAction SilentlyContinue) {
-            $chip = (Get-Content -Path (Join-Path $hwmon.FullName 'name') -ErrorAction SilentlyContinue)
-            if (-not $chip) { continue }
-            foreach ($input in Get-ChildItem -Path $hwmon.FullName -Filter 'temp*_input' -ErrorAction SilentlyContinue) {
-                $raw = Get-Content -Path $input.FullName -ErrorAction SilentlyContinue
-                if (-not $raw) { continue }
-                $base = $input.Name -replace '_input$', ''
-                $labelPath = Join-Path $hwmon.FullName "${base}_label"
-                $label = if (Test-Path $labelPath) { (Get-Content -Path $labelPath).Trim() } else { $base }
-                $sensor = [PSCustomObject]@{ Chip = $chip; Label = $label; Celsius = [Math]::Round([double]$raw / 1000, 1) }
-                $sensors.Add($sensor)
-
-                # Capteur global du processeur : Intel coretemp « Package id 0 », AMD k10temp/zenpower « Tctl »/« Tdie »,
-                # Raspberry Pi cpu_thermal.
-                if (-not $cpuSensor -and (
-                        ($chip -eq 'coretemp' -and $label -like 'Package id*') -or
-                        ($chip -in 'k10temp', 'zenpower' -and $label -in 'Tctl', 'Tdie') -or
-                        ($chip -eq 'cpu_thermal'))) {
-                    $cpuSensor = $sensor
+        # La liste des capteurs (chemins, puces, libellés) change rarement : relue toutes les 60 s ; seules les
+        # valeurs sont lues à chaque appel, par l'API .NET (les cmdlets Get-ChildItem / Get-Content coûtent ~15 ms).
+        $list = Get-Cached 'hwmon' 60 {
+            foreach ($hwmon in [System.IO.Directory]::GetDirectories('/sys/class/hwmon')) {
+                $chip = try { [System.IO.File]::ReadAllText("$hwmon/name").Trim() } catch { $null }
+                if (-not $chip) { continue }
+                foreach ($input in [System.IO.Directory]::GetFiles($hwmon, 'temp*_input')) {
+                    $base = [System.IO.Path]::GetFileName($input) -replace '_input$', ''
+                    $label = try { [System.IO.File]::ReadAllText("$hwmon/${base}_label").Trim() } catch { $base }
+                    [PSCustomObject]@{ Path = $input; Chip = $chip; Label = $label }
                 }
+            }
+        }
+        foreach ($entry in $list) {
+            $raw = try { [System.IO.File]::ReadAllText($entry.Path) } catch { $null }
+            if (-not $raw) { continue }
+            $sensor = [PSCustomObject]@{ Chip = $entry.Chip; Label = $entry.Label; Celsius = [Math]::Round([double]$raw / 1000, 1) }
+            $sensors.Add($sensor)
+
+            # Capteur global du processeur : Intel coretemp « Package id 0 », AMD k10temp/zenpower « Tctl »/« Tdie »,
+            # Raspberry Pi cpu_thermal.
+            if (-not $cpuSensor -and (
+                    ($entry.Chip -eq 'coretemp' -and $entry.Label -like 'Package id*') -or
+                    ($entry.Chip -in 'k10temp', 'zenpower' -and $entry.Label -in 'Tctl', 'Tdie') -or
+                    ($entry.Chip -eq 'cpu_thermal'))) {
+                $cpuSensor = $sensor
             }
         }
         $reason = 'Aucun capteur trouvé dans /sys/class/hwmon'
@@ -462,9 +504,10 @@ function Get-ModuleData {
     $static = $script:Static
 
     # Premier appel : point de départ des pourcentages CPU, puis un court échantillon.
-    if (($IsLinux -and -not $script:PrevCpu) -or -not $script:PrevProc) {
+    $sampled = $IsLinux -or $script:CpuSampler   # pourcentages calculés par différence entre deux appels
+    if (($sampled -and -not $script:PrevCpu) -or -not $script:PrevProc) {
         Invoke-Block 'Échantillon initial' {
-            if ($IsLinux) { [void](Get-CpuUsage) }  # point de départ global et par thread
+            if ($sampled) { [void](Get-CpuUsage) }  # point de départ global et par thread
             [void](Get-ProcessSnapshot)
             Start-Sleep -Milliseconds 250
         }
@@ -556,6 +599,8 @@ function Get-ModuleData {
             $items['Arrêt précédent'] = '{0} le {1}' -f $(if ($shutdown.Clean) { 'Propre' } else { 'Inattendu' }), $shutdown.Time.ToString('dd/MM/yyyy HH:mm', $script:Fr)
         }
         if ($processes) { $items['Processus'] = $processes.Count }
+        $self = Get-SelfUsage
+        $items['Consommation de SysInfo'] = '{0} · {1}' -f $(if ($null -ne $self.Percent) { (Format-Unit $self.Percent '% CPU' '0.0#') } else { 'CPU en cours de mesure' }), (Format-Unit ($self.Memory / 1MB) 'MiB' '0')
         $sections.Add([PSCustomObject]@{ Title = "Système d'exploitation"; Type = 'KeyValue'; Icon = 'desktop'; Items = $items })
 
         if ($shutdown -and -not $shutdown.Clean) {
@@ -808,7 +853,9 @@ function Get-SIProcesses {
     }
     $parents = Get-ParentMap
 
-    $tableRows = foreach ($r in $selected) {
+    # Liste explicite : avec une seule ligne, PowerShell « déroulerait » le tableau de lignes.
+    $tableRows = [System.Collections.Generic.List[object]]::new()
+    foreach ($r in $selected) {
         $p = $details[$r.Id]
         $user = $path = $cmd = $started = $null
         if ($p) {
@@ -824,7 +871,7 @@ function Get-SIProcesses {
             $user, $started, $path)
         if ($IsWindows) { $row += Get-SignatureText $path }
         $row += $cmd
-        , $row
+        $tableRows.Add($row)
     }
 
     $columns = @('Nom', 'PID', 'PID parent', 'CPU %', 'Mémoire (MiB)', 'Lu (MiB)', 'Écrit (MiB)', 'Utilisateur', 'Démarré le', 'Chemin')
@@ -850,7 +897,7 @@ function Get-SIProcesses {
     [PSCustomObject]@{
         Subtitle = $subtitle
         Sections = @(
-            [PSCustomObject]@{ Title = 'Processus'; Type = 'Table'; Icon = 'apps_list'; Columns = $columns; Rows = @($tableRows) }
+            [PSCustomObject]@{ Title = 'Processus'; Type = 'Table'; Icon = 'apps_list'; Columns = $columns; Rows = $tableRows.ToArray() }
         )
         Findings = $findings
     }
@@ -859,7 +906,7 @@ function Get-SIProcesses {
 # system_get_process_tree : arbre des processus (parent → enfants), depuis un PID ou depuis les racines.
 function Get-SIProcessTree {
     param(
-        [int]$ProcessId = 0,
+        [ValidateRange(0, 2147483647)][int]$ProcessId = 0,
         [ValidateRange(1, 30)][int]$MaxDepth = 10,
         [ValidateRange(1, 2000)][int]$Top = 300
     )
@@ -911,4 +958,232 @@ function Get-SIProcessTree {
 
 #endregion
 
-Export-ModuleMember -Function Get-ModuleData, Get-SIProcesses, Get-SIProcessTree
+#region Actions (niveau A : aperçu -DryRun, confirmation dans SysInfo, journal d'audit)
+
+# Résultat d'une action : Changes = ce qui a changé (ou changerait, en aperçu) ; Blocked = pourquoi l'action est
+# impossible (rien n'est alors tenté, ni proposé à la confirmation).
+function New-ActionResult([string]$Subtitle, [object[]]$Sections, [object[]]$Findings, [object[]]$Changes, [string]$Blocked) {
+    [PSCustomObject]@{
+        Subtitle = $Subtitle
+        Sections = @($Sections | Where-Object { $_ })
+        Findings = @($Findings | Where-Object { $_ })
+        Changes  = @($Changes | Where-Object { $_ })
+        Blocked  = $Blocked
+    }
+}
+function New-Change([string]$Target, [string]$Property, $Before, $After) {
+    [PSCustomObject]@{ Target = $Target; Property = $Property; Before = $Before; After = $After }
+}
+
+# Processus que SysInfo n'arrête jamais : le système s'arrêterait ou la session se fermerait.
+$script:ProtectedProcesses = @(
+    'System', 'Idle', 'Registry', 'smss', 'csrss', 'wininit', 'winlogon', 'services', 'lsass', 'LsaIso', 'svchost',
+    'fontdrvhost', 'dwm', 'MemCompression', 'MsMpEng',
+    'systemd', 'init', 'kthreadd', 'systemd-journald', 'systemd-logind', 'systemd-udevd', 'dbus-daemon', 'dbus-broker',
+    'Xorg', 'Xwayland', 'gnome-shell', 'gnome-session-binary', 'kwin_wayland', 'kwin_x11', 'gdm', 'sddm', 'lightdm',
+    'polkitd', 'auditd'
+)
+
+# Ce qu'il faut savoir avant d'agir sur un processus : propriétaire, service porté, enfants, ligne de commande.
+# Windows : Win32_Process (GetOwner, CommandLine), Win32_Service (ProcessId). Linux : /proc/<pid>/status (Uid),
+# /proc/<pid>/cgroup (unité systemd), /proc/<pid>/stat (nice).
+function Get-ProcessFacts([int]$ProcessId) {
+    $p = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+    if (-not $p) { return $null }
+    $facts = [ordered]@{ Process = $p; Owner = $null; Mine = $true; Unit = $null; Children = 0; Nice = $null; Kernel = $false }
+    $parents = Get-ParentMap
+    $facts.Children = @($parents.Keys | Where-Object { $parents[$_] -eq $ProcessId }).Count
+    if ($IsWindows) {
+        $cim = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId=$ProcessId" -ErrorAction SilentlyContinue
+        if ($cim) {
+            $owner = Invoke-CimMethod -InputObject $cim -MethodName GetOwner -ErrorAction SilentlyContinue
+            if ($owner -and $owner.ReturnValue -eq 0) { $facts.Owner = "$($owner.Domain)\$($owner.User)" }
+        }
+        $facts.Mine = $facts.Owner -and $facts.Owner -like "*\$env:USERNAME"
+        $services = @(Get-CimInstance -ClassName Win32_Service -Filter "ProcessId=$ProcessId" -ErrorAction SilentlyContinue)
+        if ($services) { $facts.Unit = ($services.Name | Select-Object -First 5) -join ', ' }
+    }
+    else {
+        $status = try { [System.IO.File]::ReadAllText("/proc/$ProcessId/status") } catch { '' }
+        $uid = if ($status -match '(?m)^Uid:\s+(\d+)') { [int]$Matches[1] } else { -1 }
+        $facts.Owner = if ($uid -ge 0) { (& id -nu $uid 2>$null) ?? "uid $uid" } else { $null }
+        $facts.Mine = $uid -eq [int](& id -u)
+        $cgroup = try { [System.IO.File]::ReadAllText("/proc/$ProcessId/cgroup") } catch { '' }
+        if ($cgroup -match '/([^/\s]+\.service)(?:/|\s|$)' -and $Matches[1] -notmatch '^(user@\d+|app-.+|session-\d+)\.service$') { $facts.Unit = $Matches[1] }
+        try {
+            $stat = [System.IO.File]::ReadAllText("/proc/$ProcessId/stat")
+            $fields = $stat.Substring($stat.LastIndexOf(')') + 2) -split ' '
+            $facts.Nice = [int]$fields[16]
+            $facts.Kernel = [int]$fields[1] -eq 2 -or $ProcessId -eq 2
+        }
+        catch { }
+    }
+    $facts
+}
+
+function Get-ProcessSection($Facts) {
+    $p = $Facts.Process
+    $items = [ordered]@{ Nom = $p.ProcessName; PID = $p.Id }
+    if ($Facts.Owner) { $items['Utilisateur'] = $Facts.Owner }
+    try { if ($p.Path) { $items['Chemin'] = $p.Path } } catch { }
+    try { $items['Démarré le'] = $p.StartTime.ToString('dd/MM/yyyy HH:mm', $script:Fr) } catch { }
+    $items['Mémoire'] = Format-Unit ($p.WorkingSet64 / 1MB) 'MiB' '0'
+    if ($Facts.Unit) { $items[$(if ($IsWindows) { 'Service(s)' } else { 'Unité systemd' })] = $Facts.Unit }
+    $items['Processus enfants'] = $Facts.Children
+    try { if ($p.CommandLine) { $items['Ligne de commande'] = Hide-Secrets $p.CommandLine } } catch { }
+    [PSCustomObject]@{ Title = 'Processus'; Type = 'KeyValue'; Icon = 'apps_list'; Items = $items }
+}
+
+# Raison de ne pas toucher à un processus (protégé, noyau, SysInfo lui-même, autre compte sans droits), ou $null.
+function Get-ProcessBlock($Facts) {
+    $p = $Facts.Process
+    if ($p.Id -eq $PID) { return 'Ce processus est SysInfo lui-même.' }
+    if ($Facts.Kernel) { return "$($p.ProcessName) est un thread du noyau." }
+    if ($p.Id -le 4 -or $p.ProcessName -in $script:ProtectedProcesses) {
+        return "$($p.ProcessName) est un processus essentiel du système ou de la session : SysInfo ne le modifie pas."
+    }
+    if (-not $Facts.Mine -and -not [Environment]::IsPrivilegedProcess) {
+        return "Processus de $($Facts.Owner ?? 'un autre compte') : relancer SysInfo en administrateur (root sous Linux)."
+    }
+    $null
+}
+
+# system_stop_process : arrête un processus. Sans force : fermeture propre (Windows : fermeture de la fenêtre
+# principale, sinon arrêt ; Linux : SIGTERM). Avec force : arrêt immédiat (Stop-Process -Force, SIGKILL).
+function Stop-SIProcess {
+    param(
+        [Parameter(Mandatory)][ValidateRange(1, 2147483647)][int]$ProcessId,
+        [bool]$Force = $false,
+        [switch]$DryRun
+    )
+
+    $facts = Get-ProcessFacts $ProcessId
+    if (-not $facts) { return New-ActionResult "PID $ProcessId" @() @() @() "Aucun processus n'a le PID $ProcessId (déjà arrêté ?)." }
+    $p = $facts.Process
+    $name = '{0} (PID {1})' -f $p.ProcessName, $p.Id
+    $section = Get-ProcessSection $facts
+    $blocked = Get-ProcessBlock $facts
+
+    $findings = [System.Collections.Generic.List[object]]::new()
+    if ($facts.Unit) {
+        $findings.Add([PSCustomObject]@{
+                Severity = 'warning'; Code = 'SYS-STOP-SERVICE-PROCESS'
+                Message = "$name porte $(if ($IsWindows) { 'le(s) service(s)' } else { "l'unité" }) $($facts.Unit) : ils s'arrêteront aussi, et peuvent être relancés automatiquement."
+                Recommendation = 'Préférer l''action « services_control » (arrêter ou redémarrer le service).'
+            })
+    }
+    if ($facts.Children -gt 0) {
+        $findings.Add([PSCustomObject]@{
+                Severity = 'info'; Code = 'SYS-STOP-CHILDREN'
+                Message = "$name a $($facts.Children) processus enfant(s) : ils ne sont pas arrêtés avec lui et peuvent continuer seuls."
+            })
+    }
+    $findings.Add([PSCustomObject]@{
+            Severity = 'info'; Code = 'SYS-STOP-UNSAVED'
+            Message = $(if ($Force) { 'Arrêt immédiat : les données non enregistrées du programme seront perdues.' }
+                else { 'Fermeture demandée au programme : il peut demander d''enregistrer, ou ignorer la demande.' })
+        })
+
+    $mode = if ($Force) { 'arrêt immédiat' } else { 'fermeture propre' }
+    if ($DryRun -or $blocked) {
+        return New-ActionResult "$name sera arrêté ($mode)" @($section) $findings @(New-Change $name 'État' 'En cours' 'Arrêté') $blocked
+    }
+
+    if ($IsWindows) {
+        if (-not $Force -and $p.MainWindowHandle -ne [IntPtr]::Zero) { [void]$p.CloseMainWindow() }
+        else { Stop-Process -Id $p.Id -Force -ErrorAction Stop }
+    }
+    else {
+        $signal = if ($Force) { '-KILL' } else { '-TERM' }
+        $out = & kill $signal $p.Id 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "kill $signal $($p.Id) a échoué : $out" }
+    }
+
+    # Attend la fin (5 s au plus).
+    $stopped = $p.WaitForExit(5000)
+    $after = if ($stopped) { 'Arrêté' } else { 'Toujours en cours' }
+    $result = [System.Collections.Generic.List[object]]::new()
+    if (-not $stopped) {
+        $result.Add([PSCustomObject]@{
+                Severity = 'warning'; Code = 'SYS-STOP-IGNORED'
+                Message = "$name tourne toujours 5 s après la demande de fermeture."
+                Recommendation = 'Il attend peut-être une réponse dans sa fenêtre ; sinon relancer avec force = true.'
+            })
+    }
+    New-ActionResult "$name : $($after.ToLower())" @($section) $result @(New-Change $name 'État' 'En cours' $after) $null
+}
+
+# Priorités proposées : classes Windows (ProcessPriorityClass) et valeurs nice Linux équivalentes.
+# Temps réel exclu : il peut figer la machine.
+$script:Priorities = [ordered]@{
+    idle = @{ Class = 'Idle'; Nice = 19; Label = 'basse' }
+    below_normal = @{ Class = 'BelowNormal'; Nice = 10; Label = 'inférieure à la normale' }
+    normal = @{ Class = 'Normal'; Nice = 0; Label = 'normale' }
+    above_normal = @{ Class = 'AboveNormal'; Nice = -5; Label = 'supérieure à la normale' }
+    high = @{ Class = 'High'; Nice = -10; Label = 'haute' }
+}
+
+function Get-PriorityLabel($Facts) {
+    if ($IsWindows) {
+        $class = try { "$($Facts.Process.PriorityClass)" } catch { $null }
+        $key = $script:Priorities.Keys | Where-Object { $script:Priorities[$_].Class -eq $class } | Select-Object -First 1
+        return $(if ($key) { $script:Priorities[$key].Label } elseif ($class) { $class } else { 'inconnue' })
+    }
+    $n = $Facts.Nice
+    if ($null -eq $n) { return 'inconnue' }
+    $label = if ($n -ge 15) { 'basse' } elseif ($n -ge 5) { 'inférieure à la normale' } elseif ($n -gt -5) { 'normale' } elseif ($n -gt -10) { 'supérieure à la normale' } else { 'haute' }
+    "$label (nice $n)"
+}
+
+# system_set_priority : change la priorité CPU d'un processus.
+# Windows : Process.PriorityClass. Linux : renice (baisser la valeur nice, donc monter la priorité, exige root).
+function Set-SIProcessPriority {
+    param(
+        [Parameter(Mandatory)][ValidateRange(1, 2147483647)][int]$ProcessId,
+        [Parameter(Mandatory)][ValidateSet('idle', 'below_normal', 'normal', 'above_normal', 'high')][string]$Priority,
+        [switch]$DryRun
+    )
+
+    $facts = Get-ProcessFacts $ProcessId
+    if (-not $facts) { return New-ActionResult "PID $ProcessId" @() @() @() "Aucun processus n'a le PID $ProcessId (déjà arrêté ?)." }
+    $p = $facts.Process
+    $name = '{0} (PID {1})' -f $p.ProcessName, $p.Id
+    $target = $script:Priorities[$Priority]
+    $before = Get-PriorityLabel $facts
+    $afterLabel = if ($IsWindows) { $target.Label } else { "$($target.Label) (nice $($target.Nice))" }
+
+    $blocked = Get-ProcessBlock $facts
+    if (-not $blocked -and $IsLinux -and $null -ne $facts.Nice -and $target.Nice -lt $facts.Nice -and -not [Environment]::IsPrivilegedProcess) {
+        $blocked = "Monter la priorité (nice $($facts.Nice) → $($target.Nice)) exige les droits root sous Linux."
+    }
+    if (-not $blocked -and $before -eq $afterLabel) { $blocked = "$name a déjà la priorité $afterLabel." }
+
+    $findings = @()
+    if ($Priority -eq 'high') {
+        $findings += [PSCustomObject]@{
+            Severity = 'info'; Code = 'SYS-PRIORITY-HIGH'
+            Message = 'Priorité haute : un programme qui occupe tout le processeur peut ralentir le reste du système.'
+        }
+    }
+    $findings += [PSCustomObject]@{ Severity = 'info'; Code = 'SYS-PRIORITY-TEMPORARY'; Message = 'Le changement dure jusqu''à la fin du processus : il n''est pas conservé au prochain lancement.' }
+
+    $change = New-Change $name 'Priorité' $before $afterLabel
+    if ($DryRun -or $blocked) { return New-ActionResult "Priorité de $name : $before → $afterLabel" @(Get-ProcessSection $facts) $findings @($change) $blocked }
+
+    if ($IsWindows) { $p.PriorityClass = [System.Diagnostics.ProcessPriorityClass]$target.Class }
+    else {
+        $out = & renice -n $target.Nice -p $p.Id 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "renice a échoué : $out" }
+    }
+    $now = Get-PriorityLabel (Get-ProcessFacts $ProcessId)
+    $done = New-ActionResult "Priorité de $name : $now" @(Get-ProcessSection $facts) $findings @(New-Change $name 'Priorité' $before $now) $null
+    # Annulation : la priorité d'avant (classe Windows, ou valeur nice la plus proche sous Linux).
+    $previous = if ($IsWindows) { $script:Priorities.Keys | Where-Object { $script:Priorities[$_].Label -eq $before } | Select-Object -First 1 }
+                elseif ($null -ne $facts.Nice) { $script:Priorities.Keys | Sort-Object { [Math]::Abs($script:Priorities[$_].Nice - $facts.Nice) } | Select-Object -First 1 }
+    if ($previous) { $done | Add-Member Undo @{ Function = 'set_priority'; Parameters = @{ processId = $ProcessId; priority = $previous } } }
+    $done
+}
+
+#endregion
+
+Export-ModuleMember -Function Get-ModuleData, Get-SIProcesses, Get-SIProcessTree, Stop-SIProcess, Set-SIProcessPriority

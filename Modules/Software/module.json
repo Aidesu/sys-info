@@ -1,0 +1,86 @@
+{
+  "id": "software",
+  "title": "Logiciels",
+  "icon": "apps_list",
+  "order": 70,
+  "refreshSeconds": 120,
+  "platforms": ["windows", "linux"],
+  "requiresAdmin": false,
+  "description": "Software of this computer: counts by source; pending updates (Linux: distribution packages from the local cache and Flatpak; Windows: last Windows Update search and install dates) and whether a restart is required; recent update history (Windows Update, dnf / apt transactions); programs started automatically at logon with their state; language runtimes (.NET, .NET Framework, Java, Python, Node.js, PowerShell, Go, Rust, PHP, Ruby, Visual C++ redistributables); installed browsers, their versions and the default browser; Windows and Office activation status (never the key); software past or near its end of support; and the installed applications (Windows programs, Linux desktop applications from packages, Flatpak and Snap). Findings flag pending updates, updates not installed for a long time, a pending restart, end-of-life software, broken startup entries and inactive licenses.",
+  "functions": [
+    {
+      "name": "list",
+      "title": "Logiciels installés",
+      "command": "Get-SISoftware",
+      "level": "L",
+      "description": "Installed software of this computer, filtered and sorted: name, version, publisher or source, install date, size and scope. Sources: applications (Windows programs from the uninstall registry; Linux desktop applications from packages, Flatpak, Snap and the user), store (Microsoft Store apps), packages (every Linux distribution package), flatpak, snap, or all.",
+      "parameters": [
+        { "name": "source", "label": "Source", "type": "string", "description": "applications, store (Windows), packages (Linux distribution packages), flatpak, snap, or all.", "enum": ["applications", "store", "packages", "flatpak", "snap", "all"], "default": "applications" },
+        { "name": "filter", "label": "Texte", "type": "string", "description": "Keep only software whose name, publisher or description contains this text (case-insensitive)." },
+        { "name": "sortBy", "label": "Tri", "type": "string", "description": "Sort by name, install date (newest first) or size (largest first).", "enum": ["name", "date", "size"], "default": "name" },
+        { "name": "top", "label": "Nombre max.", "type": "integer", "description": "Maximum number of entries returned.", "minimum": 1, "maximum": 5000, "default": 200 }
+      ]
+    },
+    {
+      "name": "get_pending_updates",
+      "title": "Mises à jour en attente",
+      "command": "Get-SIPendingUpdates",
+      "level": "L",
+      "long": true,
+      "description": "Updates available for this computer, with name, installed and new version, source and whether it is a security update. Windows: an online Windows Update search (can take a minute) plus winget upgrades if winget is installed. Linux: dnf, apt or pacman packages (with security advisories on dnf), Flatpak and Snap. With refresh, Linux package metadata is downloaded first instead of using the local cache.",
+      "dependencies": ["winget"],
+      "parameters": [
+        { "name": "refresh", "label": "Actualiser les dépôts", "type": "boolean", "description": "Linux: refresh the repository metadata before checking (slower, needs network). Windows always searches online.", "default": false }
+      ]
+    },
+    {
+      "name": "get_update_history",
+      "title": "Historique des mises à jour",
+      "command": "Get-SIUpdateHistory",
+      "level": "L",
+      "description": "Update and install history of this computer over the last days: Windows Update operations with result and KB, installed hotfixes; dnf transactions (with the packages changed by the latest ones) or apt history on Linux.",
+      "parameters": [
+        { "name": "days", "label": "Jours", "type": "integer", "description": "Number of days covered.", "minimum": 1, "maximum": 730, "default": 90 },
+        { "name": "top", "label": "Nombre max.", "type": "integer", "description": "Maximum number of operations or transactions returned.", "minimum": 1, "maximum": 1000, "default": 100 },
+        { "name": "details", "label": "Détail des paquets", "type": "integer", "description": "Linux: list the packages changed by this many most recent transactions.", "minimum": 0, "maximum": 20, "default": 3 }
+      ]
+    },
+    {
+      "name": "set_startup",
+      "title": "Programme au démarrage",
+      "command": "Set-SIStartupItem",
+      "level": "A",
+      "description": "Enables or disables one program started automatically at logon, without uninstalling it (reversible with the same action). Windows: the StartupApproved flag, as Task Manager does (Run keys and Startup folders; entries for all users need administrator rights). Linux: XDG autostart entries, through a copy in ~/.config/autostart with Hidden=true/false (system files are never changed), or systemd --user units (enable / disable). Takes effect at the next logon; the program is neither started nor stopped now. Use the names listed in get_software (Programmes au démarrage).",
+      "parameters": [
+        { "name": "name", "label": "Programme", "type": "string", "description": "Name of the startup item as listed by get_software (Windows: Run value or shortcut name; Linux: application name, .desktop file name or systemd --user unit).", "required": true },
+        { "name": "enabled", "label": "Activé", "type": "boolean", "description": "true to start it at logon, false to stop starting it.", "required": true }
+      ]
+    },
+    {
+      "name": "install_updates",
+      "title": "Installer les mises à jour",
+      "command": "Install-SIUpdates",
+      "level": "C",
+      "long": true,
+      "timeoutSeconds": 5400,
+      "description": "Installs the pending updates. scope system: Windows Update (download and install through the Windows Update agent) or the Linux package manager (dnf upgrade, with --security when securityOnly; apt-get upgrade; pacman -Syu); flatpak: flatpak update (Linux); winget: winget upgrade --all (Windows); all: everything. The preview lists the updates (Linux: from the local repository cache). Can take up to an hour; a restart may be needed after.",
+      "parameters": [
+        { "name": "scope", "label": "Portée", "type": "string", "description": "system, flatpak (Linux), winget (Windows) or all.", "enum": ["system", "flatpak", "winget", "all"], "default": "system" },
+        { "name": "securityOnly", "label": "Sécurité seulement", "type": "boolean", "description": "Only security updates (Windows Update and dnf).", "default": false }
+      ]
+    },
+    {
+      "name": "uninstall",
+      "title": "Désinstaller un logiciel",
+      "command": "Uninstall-SISoftware",
+      "level": "C",
+      "long": true,
+      "timeoutSeconds": 1800,
+      "description": "Uninstalls one program. Windows: its silent uninstall command, msiexec /x for MSI products, winget, or as a last resort its own uninstaller (a window the user must follow). Linux: dnf / apt-get / pacman remove for a package, flatpak uninstall, snap remove. The preview shows the method and, for packages, the other packages removed with it; never essential system packages. Use names from software_list.",
+      "parameters": [
+        { "name": "name", "label": "Logiciel", "type": "string", "description": "Exact name (or package / application id) as listed by software_list.", "required": true },
+        { "name": "source", "label": "Source", "type": "string", "description": "Restrict the search: program (Windows), package, flatpak, snap, or auto.", "enum": ["auto", "program", "package", "flatpak", "snap"], "default": "auto" }
+      ]
+    }
+  ]
+}

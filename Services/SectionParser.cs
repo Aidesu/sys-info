@@ -60,6 +60,67 @@ public static class SectionParser
         return findings.OrderByDescending(f => f.Severity).ToList();
     }
 
+    /// <summary>
+    /// Optional Changes of an action: @( @{ Target = 'cups.service'; Property = 'État'; Before = 'actif'; After = 'arrêté' } ).
+    /// An entry without Target or Property is ignored.
+    /// </summary>
+    public static IReadOnlyList<Change> ParseChanges(PSObject data)
+    {
+        var changes = new List<Change>();
+        foreach (var item in List(data.Properties["Changes"]?.Value))
+        {
+            if (item is null)
+                continue;
+            var ps = PSObject.AsPSObject(item);
+            string? Get(string name)
+            {
+                var value = ps.BaseObject is IDictionary d ? Unwrap(d[name]) : Unwrap(ps.Properties[name]?.Value);
+                return value is null ? null : Format(value);
+            }
+
+            var target = Get("Target");
+            var property = Get("Property");
+            if (!string.IsNullOrWhiteSpace(target) && !string.IsNullOrWhiteSpace(property))
+                changes.Add(new Change(target, property, Get("Before"), Get("After")));
+        }
+        return changes;
+    }
+
+    /// <summary>
+    /// Optional Blocked of a dry run: why the action cannot run (rights, target not found, protected). The action is
+    /// then never offered for confirmation.
+    /// </summary>
+    public static string? ParseBlocked(PSObject data) =>
+        data.Properties["Blocked"]?.Value?.ToString() is { Length: > 0 } reason ? reason : null;
+
+    /// <summary>
+    /// Optional Undo of an action: @{ Function = 'control'; Parameters = @{ name = 'cups'; action = 'start' } }, a function
+    /// of the same module that reverses it. Returned as { tool, function, parameters } for the audit log and the AI.
+    /// </summary>
+    public static System.Text.Json.Nodes.JsonObject? ParseUndo(PSObject data, ModuleManifest manifest)
+    {
+        if (data.Properties["Undo"]?.Value is not { } value)
+            return null;
+        var ps = PSObject.AsPSObject(value);
+        object? Get(string name) => ps.BaseObject is IDictionary d ? d[name] : ps.Properties[name]?.Value;
+        if (Unwrap(Get("Function"))?.ToString() is not { Length: > 0 } function)
+            return null;
+        return new System.Text.Json.Nodes.JsonObject
+        {
+            ["tool"] = $"{manifest.Id.Replace('-', '_')}_{function}",
+            ["function"] = function,
+            ["parameters"] = Mcp.PsJson.ToJson(Get("Parameters")) ?? new System.Text.Json.Nodes.JsonObject(),
+        };
+    }
+
+    /// <summary>The changes as a table section, shown first in the result of an action.</summary>
+    public static TableSection? ChangesSection(IReadOnlyList<Change> changes, bool dryRun) =>
+        changes.Count == 0 ? null
+        : new TableSection(dryRun ? "Modifications prévues" : "Modifications",
+            ["Objet", "Propriété", "Avant", "Après"],
+            [.. changes.Select(c => (IReadOnlyList<object?>)[c.Target, c.Property, c.Before ?? "—", c.After ?? "—"])])
+        { Icon = "arrow_swap" };
+
     private static Section ParseSection(PSObject section)
     {
         var title = section.Properties["Title"]?.Value?.ToString() ?? string.Empty;

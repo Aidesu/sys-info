@@ -1,0 +1,116 @@
+{
+  "id": "security",
+  "title": "Sécurité",
+  "icon": "shield_checkmark",
+  "order": 60,
+  "refreshSeconds": 60,
+  "platforms": ["windows", "linux"],
+  "requiresAdmin": false,
+  "description": "Security posture of this computer: a security score (100 minus weighted findings); antivirus (Windows Security Center products, Microsoft Defender real-time protection, signature age, last scan, recent threats; ClamAV on Linux); firewall (Windows profiles and inbound allow rules; firewalld or ufw zones and open services / ports on Linux); disk encryption per volume (BitLocker state and protector types, LUKS; never any key); platform protections (Secure Boot, VBS / HVCI / Credential Guard, LSA protection, UAC, SmartScreen, PowerShell execution policy; SELinux / AppArmor and kernel lockdown on Linux); local accounts (enabled, administrator, last logon, password settings) and privileged groups; open sessions and failed logons over 24 hours; password and lockout policy; remote access (RDP and NLA, WinRM, SSH server settings); obsolete protocols on Windows (SMBv1, TLS 1.0 / 1.1, NTLMv1); suspicious persistence entries; locally added root certificates. Findings flag every weakness with a recommendation.",
+  "functions": [
+    {
+      "name": "get_logons",
+      "title": "Connexions et échecs",
+      "command": "Get-SILogons",
+      "level": "L",
+      "description": "Successful and failed logons of this computer over a time window: time, account, kind (local, remote desktop, SSH, unlock, sudo…), source address and result, newest first, plus failures grouped by account and source address. Windows reads the Security log (needs SysInfo to run as administrator); Linux reads wtmp (last) and the journal (sshd, PAM, sudo failures).",
+      "parameters": [
+        { "name": "sinceHours", "label": "Depuis (heures)", "type": "integer", "description": "Time window, in hours before now.", "minimum": 1, "maximum": 2160, "default": 168 },
+        { "name": "result", "label": "Résultat", "type": "string", "description": "Keep successful logons, failed logons or both.", "enum": ["all", "success", "failed"], "default": "all" },
+        { "name": "top", "label": "Nombre max.", "type": "integer", "description": "Maximum number of logons returned.", "minimum": 1, "maximum": 1000, "default": 100 }
+      ]
+    },
+    {
+      "name": "get_firewall_rules",
+      "title": "Règles du pare-feu",
+      "command": "Get-SIFirewallRules",
+      "level": "L",
+      "description": "Firewall rules of this computer. Windows: enabled rules with direction, action, profiles, protocol, local ports, remote addresses and program, flagging broad inbound allow rules (any port, any address, public profile, program outside system folders). Linux: firewalld zones (interfaces, services, ports, rich rules) or ufw status.",
+      "parameters": [
+        { "name": "direction", "label": "Sens", "type": "string", "description": "Windows: inbound, outbound or all. Ignored on Linux (firewalld zones describe inbound traffic).", "enum": ["inbound", "outbound", "all"], "default": "inbound" },
+        { "name": "action", "label": "Action", "type": "string", "description": "Windows: keep allow rules, block rules or both. Ignored on Linux.", "enum": ["allow", "block", "all"], "default": "allow" },
+        { "name": "filter", "label": "Texte", "type": "string", "description": "Keep only rules whose name, program, service or port contains this text (case-insensitive)." },
+        { "name": "top", "label": "Nombre max.", "type": "integer", "description": "Maximum number of rules returned.", "minimum": 1, "maximum": 2000, "default": 200 }
+      ]
+    },
+    {
+      "name": "find_persistence",
+      "title": "Points de persistance",
+      "command": "Find-SIPersistence",
+      "level": "L",
+      "description": "Every place a program can start itself automatically, with the command and why it looks suspicious (temporary or public folder, encoded or downloading script, unsigned binary, missing file, hijacked logon or debugger key, WMI consumer, preloaded library). Windows: Run / RunOnce keys, startup folders, Winlogon, Image File Execution Options debuggers, AppInit_DLLs, non-Microsoft scheduled tasks, WMI event subscriptions. Linux: cron (system and own crontab), local systemd units (system and user), autostart desktop entries, rc.local, ld.so.preload.",
+      "parameters": [
+        { "name": "suspiciousOnly", "label": "Suspects seulement", "type": "boolean", "description": "Return only the entries flagged as suspicious.", "default": false },
+        { "name": "includeVendor", "label": "Inclure Microsoft / paquets", "type": "boolean", "description": "Also return entries from Microsoft (Windows scheduled tasks under \\Microsoft) or installed by a distribution package (Linux).", "default": false }
+      ]
+    },
+    {
+      "name": "get_certificates",
+      "title": "Certificats",
+      "command": "Get-SICertificates",
+      "level": "L",
+      "description": "Certificates of this computer: subject, issuer, store, expiry date and days left, flagging expired or soon-expiring certificates and root certificates added locally (not shipped by Windows Update or the distribution), which can reveal TLS interception. Windows: LocalMachine and CurrentUser stores; Linux: system CA bundle and local trust anchors. Thumbprints and keys are never returned.",
+      "parameters": [
+        { "name": "scope", "label": "Magasins", "type": "string", "description": "personal = machine and user personal certificates (with a private key usage), roots = trusted roots and intermediate authorities, added = locally added roots only, all = everything.", "enum": ["personal", "roots", "added", "all"], "default": "personal" },
+        { "name": "expiringDays", "label": "Expire sous (jours)", "type": "integer", "description": "Flag certificates expiring within this many days.", "minimum": 0, "maximum": 365, "default": 30 },
+        { "name": "top", "label": "Nombre max.", "type": "integer", "description": "Maximum number of certificates returned.", "minimum": 1, "maximum": 2000, "default": 200 }
+      ]
+    },
+    {
+      "name": "get_acl",
+      "title": "Autorisations d'un dossier",
+      "command": "Get-SIAcl",
+      "level": "L",
+      "description": "Permissions of one file or folder: owner and access rules (identity, rights, allow / deny, inherited) on Windows; owner, group, mode and ACL entries (getfacl) on Linux. Flags write access granted to everyone or to all users. Only metadata is read, never the content.",
+      "parameters": [
+        { "name": "path", "label": "Chemin", "type": "string", "description": "Full path of the file or folder.", "required": true }
+      ]
+    },
+    {
+      "name": "find_special_files",
+      "title": "Fichiers SUID et modifiables par tous",
+      "command": "Find-SISpecialFiles",
+      "level": "L",
+      "long": true,
+      "platforms": ["linux"],
+      "description": "Searches a file system tree for SUID / SGID executables (run with their owner's rights) or world-writable files and folders, and tells which ones are not owned by an installed package (unusual, worth checking). Stays on one file system; can take several seconds on a large tree.",
+      "parameters": [
+        { "name": "kind", "label": "Type", "type": "string", "description": "suid = SUID and SGID executables; writable = world-writable files and folders without the sticky bit.", "enum": ["suid", "writable"], "default": "suid" },
+        { "name": "path", "label": "Dossier", "type": "string", "description": "Root of the search (stays on its file system).", "default": "/" },
+        { "name": "top", "label": "Nombre max.", "type": "integer", "description": "Maximum number of files returned.", "minimum": 1, "maximum": 2000, "default": 300 }
+      ]
+    },
+    {
+      "name": "start_scan",
+      "title": "Analyse antivirus rapide",
+      "command": "Start-SIAntivirusScan",
+      "level": "A",
+      "long": true,
+      "timeoutSeconds": 3600,
+      "description": "Runs a quick antivirus scan of this computer and returns the threats found. Windows: Microsoft Defender quick scan (memory, startup and usual locations), then the threats detected since it started; blocked when another antivirus is active. Linux: ClamAV (clamdscan when the daemon runs, else clamscan) on Downloads, Desktop, ~/.local/bin, autostart, /tmp, /var/tmp and /dev/shm; nothing is deleted. Takes a few minutes. Blocked when no supported antivirus is installed."
+    },
+    {
+      "name": "update_signatures",
+      "title": "Mettre à jour les signatures",
+      "command": "Update-SIAntivirusSignatures",
+      "level": "A",
+      "long": true,
+      "timeoutSeconds": 1800,
+      "description": "Updates the antivirus signatures now. Windows: Update-MpSignature (Microsoft Defender). Linux: freshclam (needs root; blocked when the clamav-freshclam service already updates them). Returns the signature version or date before and after."
+    },
+    {
+      "name": "set_firewall",
+      "title": "Modifier le pare-feu",
+      "command": "Set-SIFirewall",
+      "level": "C",
+      "description": "Changes the firewall. enable / disable: Windows profiles (Set-NetFirewallProfile), ufw, or the firewalld service. allow_port: opens an inbound port (Windows: a rule in the SysInfo group; firewalld: permanent port in the default zone; ufw allow). block_port: Windows blocking rule; Linux: removes the open port (ufw deny). remove_rule: Windows: deletes a rule of the SysInfo group only (ruleName); Linux: removes the port. Blocked when nothing would change (port already open by a range…) and for hand-written nftables rulesets. Reversible.",
+      "parameters": [
+        { "name": "operation", "label": "Opération", "type": "string", "description": "enable, disable, allow_port, block_port or remove_rule.", "enum": ["enable", "disable", "allow_port", "block_port", "remove_rule"], "required": true },
+        { "name": "port", "label": "Port", "type": "integer", "description": "Port for allow_port, block_port and remove_rule on Linux.", "minimum": 1, "maximum": 65535 },
+        { "name": "protocol", "label": "Protocole", "type": "string", "description": "tcp or udp.", "enum": ["tcp", "udp"], "default": "tcp" },
+        { "name": "firewallProfile", "label": "Profil (Windows)", "type": "string", "description": "Windows profile: all, domain, private or public. Ignored on Linux.", "enum": ["all", "domain", "private", "public"], "default": "all" },
+        { "name": "ruleName", "label": "Règle (Windows)", "type": "string", "description": "Windows: display name of a SysInfo rule to remove." }
+      ]
+    }
+  ]
+}

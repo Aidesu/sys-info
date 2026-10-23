@@ -34,6 +34,13 @@ public abstract partial class NavPageViewModel : ViewModelBase
     /// <summary>Tooltip of the collapsed sidebar: the title, and the state when there is one.</summary>
     public string NavToolTip => HasStatus ? $"{Title} · {StatusText}" : Title;
 
+    /// <summary>Short counter next to the entry (« 2 » tasks running); null = none.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasBadge))]
+    public partial string? Badge { get; protected set; }
+
+    public bool HasBadge => Badge is not null;
+
     /// <summary>True while the page is shown.</summary>
     [ObservableProperty]
     public partial bool IsActive { get; set; }

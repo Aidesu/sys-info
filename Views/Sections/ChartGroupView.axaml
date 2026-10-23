@@ -68,6 +68,7 @@
                                      Label1="{Binding PrimaryLabel}"
                                      Label2="{Binding SecondaryLabel}"
                                      Times="{Binding HistoryTimes}"
+                                     Window="{Binding ChartWindow}"
                                      Maximum="{Binding ChartMaximum}"
                                      Unit="{Binding Unit}"
                                      Capacity="{x:Static vm:MetricSectionViewModel.HistoryLength}"

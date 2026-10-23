@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:SysInfo.ViewModels"
              xmlns:conv="using:SysInfo.Converters"
+             xmlns:c="using:SysInfo.Controls"
              x:Class="SysInfo.Views.ModuleTabView"
              x:DataType="vm:ModuleTabViewModel">
 
@@ -36,49 +37,70 @@
             </DockPanel>
         </Border>
 
-        <!-- Contenu : erreur éventuelle, squelette au premier chargement, puis les sections -->
+        <!-- Contenu : erreur éventuelle, constats, squelette au premier chargement, puis les sections.
+             Chaque bloc est dans un AnimatedHeight : quand il apparaît, disparaît ou change de taille, la suite
+             de la page glisse au lieu de sauter. L'espacement est la marge basse de chaque bloc (un bloc replié
+             ne laisse pas de trou). -->
         <ScrollViewer Padding="{StaticResource PagePadding}">
-            <StackPanel Spacing="{StaticResource Space16}">
+            <StackPanel>
 
-                <Border Classes="Card" IsVisible="{Binding HasError}">
-                    <DockPanel>
-                        <Panel DockPanel.Dock="Left" VerticalAlignment="Top" Margin="0,2,12,0">
-                            <PathIcon Data="{StaticResource Icon.error_circle}" Foreground="{DynamicResource Danger}"
-                                      IsVisible="{Binding CanRetry}" />
-                            <PathIcon Data="{StaticResource Icon.warning}" Foreground="{DynamicResource Warning}"
-                                      IsVisible="{Binding NeedsElevation}" />
-                        </Panel>
-                        <Button DockPanel.Dock="Right" VerticalAlignment="Top"
-                                Content="Réessayer" Command="{Binding RefreshCommand}"
-                                IsVisible="{Binding CanRetry}" />
-                        <StackPanel Spacing="{StaticResource Space4}">
-                            <TextBlock Classes="CardTitle" Text="{Binding ErrorTitle}" />
-                            <SelectableTextBlock Classes="Value" Foreground="{DynamicResource TextSecondary}"
-                                                 Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
-                        </StackPanel>
-                    </DockPanel>
-                </Border>
+                <c:AnimatedHeight IsCollapsed="{Binding !HasError}">
+                    <Border Classes="Card" Margin="0,0,0,16">
+                        <DockPanel>
+                            <Panel DockPanel.Dock="Left" VerticalAlignment="Top" Margin="0,2,12,0">
+                                <PathIcon Data="{StaticResource Icon.error_circle}" Foreground="{DynamicResource Danger}"
+                                          IsVisible="{Binding CanRetry}" />
+                                <PathIcon Data="{StaticResource Icon.warning}" Foreground="{DynamicResource Warning}"
+                                          IsVisible="{Binding NeedsElevation}" />
+                            </Panel>
+                            <Button DockPanel.Dock="Right" VerticalAlignment="Top"
+                                    Content="Réessayer" Command="{Binding RefreshCommand}"
+                                    IsVisible="{Binding CanRetry}" />
+                            <StackPanel Spacing="{StaticResource Space4}">
+                                <TextBlock Classes="CardTitle" Text="{Binding ErrorTitle}" />
+                                <SelectableTextBlock Classes="Value" Foreground="{DynamicResource TextSecondary}"
+                                                     Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                </c:AnimatedHeight>
 
-                <!-- Constats du module (Findings), les plus graves d'abord : icône d'état, message, recommandation -->
-                <Border Classes="Card" IsVisible="{Binding HasFindings}">
-                    <StackPanel Spacing="{StaticResource Space12}">
-                        <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space8}">
-                            <PathIcon Classes="CardIcon" Data="{StaticResource Icon.info}" />
-                            <TextBlock Classes="CardTitle" Text="Constats" VerticalAlignment="Center" />
+                <!-- Constats du module, les plus graves d'abord ; au-delà de quelques-uns, « Voir plus » -->
+                <c:AnimatedHeight IsCollapsed="{Binding !FindingList.HasFindings}">
+                    <Border Classes="Card" Margin="0,0,0,16">
+                        <StackPanel>
+                            <DockPanel Margin="0,0,0,12">
+                                <TextBlock DockPanel.Dock="Right" Classes="Caption" Text="{Binding FindingList.Summary}"
+                                           VerticalAlignment="Center" />
+                                <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space8}">
+                                    <PathIcon Classes="CardIcon" Data="{StaticResource Icon.info}" />
+                                    <TextBlock Classes="CardTitle" Text="Constats" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </DockPanel>
+                            <ItemsControl ItemsSource="{Binding FindingList.Items}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:FindingItemViewModel">
+                                        <c:AnimatedHeight IsCollapsed="{Binding IsCollapsed}" AnimateOnLoad="{Binding AnimateIn}">
+                                            <ContentControl Content="{Binding Finding}" Margin="0,0,0,12" />
+                                        </c:AnimatedHeight>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Button Classes="More" Command="{Binding FindingList.ToggleExpandedCommand}"
+                                    IsVisible="{Binding FindingList.CanExpand}">
+                                <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space4}">
+                                    <TextBlock Text="{Binding FindingList.MoreText}" VerticalAlignment="Center" />
+                                    <PathIcon Classes="MoreChevron" Classes.Open="{Binding FindingList.IsExpanded}"
+                                              Data="{StaticResource Icon.chevron_down}" />
+                                </StackPanel>
+                            </Button>
                         </StackPanel>
-                        <ItemsControl ItemsSource="{Binding Findings}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <StackPanel Spacing="{StaticResource Space12}" />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                        </ItemsControl>
-                    </StackPanel>
-                </Border>
+                    </Border>
+                </c:AnimatedHeight>
 
                 <!-- Squelette : une carte de valeurs, une carte de métrique -->
                 <StackPanel Spacing="{StaticResource Space16}" IsVisible="{Binding ShowSkeleton}" Classes.Pulse="{Binding ShowSkeleton}"
-                            AutomationProperties.Name="Chargement du module">
+                            Margin="0,0,0,16" AutomationProperties.Name="Chargement du module">
                     <Border Classes="Card">
                         <StackPanel Spacing="{StaticResource Space12}">
                             <Border Classes="Skeleton" Width="120" Height="14" HorizontalAlignment="Left" />
@@ -98,23 +120,36 @@
                 </StackPanel>
 
                 <!-- Chaque bloc est rendu par sa vue (ViewLocator : …ViewModel → …View) ;
-                     les Metric consécutives forment un MetricGroup (cartes en ligne, graphiques dessous) -->
-                <ItemsControl ItemsSource="{Binding Blocks}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <StackPanel Spacing="{StaticResource Space16}" />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
+                     les Metric consécutives forment un MetricGroup (cartes en ligne, graphiques dessous).
+                     Fondu à l'arrivée des données ; hauteur animée quand un bloc grandit ou rétrécit. -->
+                <ItemsControl Classes="Blocks" Classes.Loading="{Binding ShowSkeleton}" ItemsSource="{Binding Blocks}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ViewModelBase">
+                            <c:AnimatedHeight>
+                                <ContentControl Content="{Binding}" Margin="0,0,0,16" />
+                            </c:AnimatedHeight>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
                 <!-- Outils : fonctions ciblées du module (module.json › functions), même source que les outils MCP -->
-                <Border Classes="Card" IsVisible="{Binding HasTools}">
+                <Border Classes="Card" IsVisible="{Binding HasTools}" Margin="0,0,0,16">
                     <StackPanel Spacing="{StaticResource Space12}">
                         <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space8}">
                             <PathIcon Classes="CardIcon" Data="{StaticResource Icon.search}" />
                             <TextBlock Classes="CardTitle" Text="Outils" VerticalAlignment="Center" />
                         </StackPanel>
-                        <ItemsControl ItemsSource="{Binding Tools}">
+                        <!-- Consultations d'abord, puis les actions sous leur propre titre -->
+                        <ItemsControl ItemsSource="{Binding ReadTools}" IsVisible="{Binding HasReadTools}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Spacing="{StaticResource Space8}" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                        <TextBlock Classes="Label" Text="Actions" Foreground="{DynamicResource TextSecondary}"
+                                   Margin="0,8,0,0" IsVisible="{Binding HasActionTools}" />
+                        <ItemsControl ItemsSource="{Binding ActionTools}" IsVisible="{Binding HasActionTools}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <StackPanel Spacing="{StaticResource Space8}" />

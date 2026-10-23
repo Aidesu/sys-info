@@ -1,13 +1,11 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Management.Automation;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using SysInfo.Models;
@@ -18,43 +16,49 @@ namespace SysInfo.Mcp;
 /// <summary>
 /// One MCP tool backed by one PowerShell function of a module: get_&lt;id&gt; (Get-ModuleData, the tab's overview)
 /// or &lt;id&gt;_&lt;name&gt; (a function declared in module.json, with parameters). The input schema is built from
-/// module.json, arguments are checked here, then passed as named parameters to the same runspace as the module's
-/// other tools. The result is the standard envelope (see <see cref="Envelope"/>).
+/// module.json, arguments are checked here, then passed as named parameters to the module's runspaces
+/// (<see cref="ModuleRunner"/>). The result is the standard envelope (see <see cref="Envelope"/>).
+/// <para>
+/// An action (level A) takes an extra dryRun argument: true returns the preview only. Otherwise the action is
+/// previewed, refused at once if the preview says it cannot run (Blocked), then confirmed by the user in a SysInfo
+/// window (<see cref="ConfirmationProcess"/>) before it runs. A long function runs as a job (<see cref="JobManager"/>).
+/// Every call is written to the audit log.
+/// </para>
 /// </summary>
 public sealed class ModuleTool : McpServerTool
 {
-    private readonly LoadedModule _module;
+    private readonly ModuleRunner _runner;
     private readonly ModuleFunction? _function;
-    private readonly ConcurrentDictionary<string, PowerShellService> _services;
+    private readonly JobManager _jobs;
 
-    private ModuleTool(LoadedModule module, ModuleFunction? function, ConcurrentDictionary<string, PowerShellService> services)
+    private ModuleTool(ModuleRunner runner, ModuleFunction? function, JobManager jobs, bool actions = true)
     {
-        _module = module;
+        _runner = runner;
         _function = function;
-        _services = services;
+        _jobs = jobs;
+        var module = runner.Module;
+        var action = function?.IsAction == true;
 
         ProtocolTool = new Tool
         {
             Name = function is null ? OverviewName(module.Manifest) : FunctionName(module.Manifest, function),
-            Title = function is null ? module.Manifest.Title : $"{module.Manifest.Title} · {function.Name}",
-            Description = function is null ? McpDescriptions.Overview(module) : McpDescriptions.Function(module.Manifest, function),
-            InputSchema = BuildInputSchema(function?.Parameters ?? []),
+            Title = function is null ? module.Manifest.Title : $"{module.Manifest.Title} · {function.Title ?? function.Name}",
+            Description = function is null ? McpDescriptions.Overview(module, actions) : McpDescriptions.Function(module.Manifest, function),
+            InputSchema = BuildInputSchema(function?.Parameters ?? [], action),
             Annotations = new ToolAnnotations
             {
                 Title = module.Manifest.Title,
-                ReadOnlyHint = true,
-                DestructiveHint = false,
-                IdempotentHint = true,
+                ReadOnlyHint = !action,
+                DestructiveHint = function?.Level == AccessLevel.C,
+                IdempotentHint = !action,
                 OpenWorldHint = false,
             },
         };
     }
 
-    public static ModuleTool Overview(LoadedModule module, ConcurrentDictionary<string, PowerShellService> services) =>
-        new(module, null, services);
+    public static ModuleTool Overview(ModuleRunner runner, JobManager jobs, bool actions) => new(runner, null, jobs, actions);
 
-    public static ModuleTool ForFunction(LoadedModule module, ModuleFunction function, ConcurrentDictionary<string, PowerShellService> services) =>
-        new(module, function, services);
+    public static ModuleTool ForFunction(ModuleRunner runner, ModuleFunction function, JobManager jobs) => new(runner, function, jobs);
 
     public static string OverviewName(ModuleManifest manifest) => $"get_{ToolId(manifest)}";
 
@@ -66,57 +70,177 @@ public sealed class ModuleTool : McpServerTool
 
     public override IReadOnlyList<object> Metadata { get; } = [];
 
+    private ModuleManifest Manifest => _runner.Module.Manifest;
+
     private string FunctionLabel => _function?.Name ?? "get_module_data";
 
-    private string Command => _function?.Command ?? "Get-ModuleData";
+    private bool IsAction => _function?.IsAction == true;
 
     public override async ValueTask<CallToolResult> InvokeAsync(
         RequestContext<CallToolRequestParams> request, CancellationToken cancellationToken = default)
     {
-        var manifest = _module.Manifest;
-
-        // Same rule as the window: an admin module or function never runs without admin rights.
-        if ((manifest.RequiresAdmin || _function?.RequiresAdmin == true) && !Environment.IsPrivilegedProcess)
-        {
-            return Error($"'{ProtocolTool.Name}' requires administrator rights (root on Linux). " +
-                         "Restart SysInfo --mcp elevated to use this tool.");
-        }
-
+        var client = request.Server.ClientInfo is { } info ? $"{info.Name} {info.Version}".Trim() : null;
         Dictionary<string, object?> parameters;
+        var dryRun = false;
         try
         {
-            parameters = BindArguments(_function?.Parameters ?? [], request.Params?.Arguments);
+            var arguments = request.Params?.Arguments;
+            parameters = FunctionArguments.Bind(_function?.Parameters ?? [], arguments, IsAction ? [FunctionArguments.DryRun] : []);
+            if (IsAction && arguments?.TryGetValue(FunctionArguments.DryRun, out var flag) == true && flag.ValueKind != JsonValueKind.Null)
+            {
+                dryRun = flag.ValueKind switch
+                {
+                    JsonValueKind.True => true,
+                    JsonValueKind.False => false,
+                    _ => throw new ArgumentException($"'{FunctionArguments.DryRun}' must be of type boolean"),
+                };
+            }
         }
         catch (ArgumentException ex)
         {
             return Error($"Invalid arguments for '{ProtocolTool.Name}': {ex.Message}");
         }
 
+        // Same rule as the window: an admin module or function never runs without admin rights; a critical action
+        // can still be previewed.
+        if (_runner.RightsProblem(_function, dryRun) is not null)
+        {
+            return Error($"'{ProtocolTool.Name}' requires administrator rights (root on Linux). Restart SysInfo --mcp " +
+                         "elevated to use this tool" + (_function?.Level == AccessLevel.C ? " (dryRun=true works without them)." : "."));
+        }
+
+        var audit = new AuditEntry
+        {
+            Origin = "mcp",
+            Client = client,
+            Tool = ProtocolTool.Name,
+            Module = Manifest.Id,
+            Function = FunctionLabel,
+            Level = _function?.Level ?? AccessLevel.L,
+            Parameters = parameters,
+            DryRun = dryRun,
+            Status = "error",
+        };
+
         try
         {
-            // One runspace per module, created on first call and shared by its tools (calls are serialized).
-            var service = _services.GetOrAdd(manifest.Id, _ => new PowerShellService(_module.ScriptPath));
-            var watch = Stopwatch.StartNew();
-            var data = await service.InvokeAsync(Command, parameters);
-            watch.Stop();
+            if (!IsAction || dryRun)
+                return await RunAsync(parameters, dryRun, audit, cancellationToken);
 
-            var envelope = Envelope.Build(manifest.Id, FunctionLabel, data, watch.Elapsed);
-            return new CallToolResult
+            // Action: preview first. When it cannot run (rights, unknown target, protected), the user is not asked.
+            var (preview, previewDuration) = await _runner.InvokeAsync(_function, parameters, dryRun: true, cancellationToken);
+            if (SectionParser.ParseBlocked(preview) is { } blocked)
             {
-                Content = [new TextContentBlock { Text = envelope.ToJsonString(JsonOptions) }],
-                StructuredContent = JsonSerializer.SerializeToElement(envelope),
-            };
+                AuditLog.Write(audit with { DryRun = true, Status = "blocked", DurationMs = (long)previewDuration.TotalMilliseconds, Error = blocked });
+                return Error($"'{ProtocolTool.Name}' cannot run: {blocked} (the user was not asked).");
+            }
+
+            var (decision, detail) = await ConfirmationProcess.RequestAsync(_runner.Module, _function!, parameters, client, cancellationToken);
+            if (decision != ConfirmationResult.Confirmed)
+            {
+                var (confirmation, message) = decision switch
+                {
+                    ConfirmationResult.Declined => ("declined", "The user declined the action in SysInfo. Do not retry it unless they ask."),
+                    ConfirmationResult.TimedOut => ("timeout", $"The user did not answer the SysInfo confirmation window within {ConfirmationProcess.TimeoutSeconds} s; nothing was changed."),
+                    _ => ("unavailable", $"The action could not be confirmed: {detail}. Nothing was changed; the user can run it from the Outils card of the SysInfo window."),
+                };
+                AuditLog.Write(audit with { Confirmation = confirmation, Status = "declined", Error = detail });
+                return Error($"'{ProtocolTool.Name}': {message}");
+            }
+
+            // Critical action: restore point first; if it cannot be created, the action does not run.
+            string? restorePoint;
+            try
+            {
+                restorePoint = await RestorePoints.CreateBeforeAsync(_runner.Module, _function!, cancellationToken);
+            }
+            catch (InvalidOperationException ex)
+            {
+                AuditLog.Write(audit with { Confirmation = "confirmed", Error = ex.Message });
+                return Error($"'{ProtocolTool.Name}': {ex.Message}");
+            }
+
+            return await RunAsync(parameters, false, audit with { Confirmation = "confirmed", RestorePoint = restorePoint }, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            AuditLog.Write(audit with { Status = "cancelled" });
+            throw;
         }
         catch (Exception ex)
         {
             // A failing module is a tool error, never a server crash.
             Console.Error.WriteLine($"[mcp] {ProtocolTool.Name} : {ex.Message}");
+            AuditLog.Write(audit with { Error = ex.Message });
             return Error($"'{ProtocolTool.Name}' failed: {ex.Message}");
         }
     }
 
+    // Runs the function (or its preview) and writes the audit line. A long function runs as a job: its result comes
+    // back here if it ends within the first wait, else the agent gets the job id.
+    private async Task<CallToolResult> RunAsync(
+        Dictionary<string, object?> parameters, bool dryRun, AuditEntry audit, CancellationToken cancellationToken)
+    {
+        if (_function?.Long != true || dryRun)
+        {
+            var (data, duration) = await _runner.InvokeAsync(_function, parameters, dryRun, cancellationToken);
+            var undo = Audit(audit, data, duration);
+            return Success(Envelope.Build(Manifest.Id, FunctionLabel, data, duration, IsAction, dryRun, undo: undo, restorePoint: audit.RestorePoint));
+        }
+
+        var job = _jobs.Start(ProtocolTool.Name, async (id, token) =>
+        {
+            try
+            {
+                var (data, duration) = await _runner.InvokeAsync(_function, parameters, false, token);
+                var undo = Audit(audit with { JobId = id }, data, duration);
+                return Envelope.Build(Manifest.Id, FunctionLabel, data, duration, IsAction, false, id, undo, audit.RestorePoint);
+            }
+            catch (Exception ex)
+            {
+                AuditLog.Write(audit with { JobId = id, Status = ex is OperationCanceledException ? "cancelled" : "error", Error = ex.Message });
+                throw;
+            }
+        });
+        // Start line: the window's Activité page shows the task as running until its end line (same jobId).
+        AuditLog.Write(audit with { JobId = job.Id, Status = "running" });
+
+        await job.WaitAsync(JobManager.FirstWait, cancellationToken);
+        return JobResult(job);
+    }
+
+    // Writes the audit line of a finished call; returns the action's undo, if any.
+    private JsonObject? Audit(AuditEntry audit, PSObject data, TimeSpan duration)
+    {
+        var findings = SectionParser.ParseFindings(data);
+        var undo = audit.DryRun ? null : SectionParser.ParseUndo(data, Manifest);
+        AuditLog.Write(audit with
+        {
+            Status = SectionParser.ParseBlocked(data) is null ? AuditLog.StatusOf(findings) : "blocked",
+            DurationMs = (long)duration.TotalMilliseconds,
+            Findings = [.. findings.Select(f => f.Code)],
+            Changes = SectionParser.ParseChanges(data),
+            Undo = undo,
+        });
+        return undo;
+    }
+
+    /// <summary>A job as a tool result: its envelope once completed, its state while running, an error if it failed.</summary>
+    internal static CallToolResult JobResult(Job job) => job.State switch
+    {
+        JobState.Completed => Success(job.Result!),
+        JobState.Failed => Error($"'{job.Tool}' failed (job {job.Id}): {job.Error}"),
+        _ => Success(job.Describe()),
+    };
+
+    internal static CallToolResult Success(JsonObject json) => new()
+    {
+        Content = [new TextContentBlock { Text = json.ToJsonString(JsonOptions) }],
+        StructuredContent = JsonSerializer.SerializeToElement(json),
+    };
+
     // JSON Schema of the arguments, from module.json. No unknown argument is accepted.
-    private static JsonElement BuildInputSchema(IReadOnlyList<FunctionParameter> parameters)
+    private static JsonElement BuildInputSchema(IReadOnlyList<FunctionParameter> parameters, bool action)
     {
         var properties = new JsonObject();
         foreach (var parameter in parameters)
@@ -143,6 +267,15 @@ public sealed class ModuleTool : McpServerTool
                 property["default"] = JsonNode.Parse(value.GetRawText());
             properties[parameter.Name] = property;
         }
+        if (action)
+        {
+            properties[FunctionArguments.DryRun] = new JsonObject
+            {
+                ["type"] = "boolean",
+                ["description"] = "Preview only: returns what would change (changes, findings, blocked), changes nothing and asks nobody.",
+                ["default"] = false,
+            };
+        }
 
         var schema = new JsonObject
         {
@@ -157,57 +290,7 @@ public sealed class ModuleTool : McpServerTool
         return JsonSerializer.SerializeToElement(schema);
     }
 
-    // Checks each argument against module.json and converts it to the .NET type PowerShell expects.
-    private static Dictionary<string, object?> BindArguments(
-        IReadOnlyList<FunctionParameter> parameters, IDictionary<string, JsonElement>? arguments)
-    {
-        var bound = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-        arguments ??= new Dictionary<string, JsonElement>();
-
-        foreach (var name in arguments.Keys)
-        {
-            if (!parameters.Any(p => p.Name.Equals(name, StringComparison.Ordinal)))
-                throw new ArgumentException($"unknown argument '{name}'" +
-                    (parameters.Count > 0 ? $" (expected: {string.Join(", ", parameters.Select(p => p.Name))})" : " (this tool takes no arguments)"));
-        }
-
-        foreach (var parameter in parameters)
-        {
-            if (!arguments.TryGetValue(parameter.Name, out var value) || value.ValueKind == JsonValueKind.Null)
-            {
-                if (parameter.Required)
-                    throw new ArgumentException($"'{parameter.Name}' is required");
-                continue;
-            }
-
-            object converted = parameter.Type switch
-            {
-                ParameterType.Integer when value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var i) => i,
-                ParameterType.Number when value.ValueKind == JsonValueKind.Number => value.GetDouble(),
-                ParameterType.Boolean when value.ValueKind is JsonValueKind.True or JsonValueKind.False => value.GetBoolean(),
-                ParameterType.String when value.ValueKind == JsonValueKind.String => value.GetString()!,
-                _ => throw new ArgumentException($"'{parameter.Name}' must be of type {parameter.Type.ToString().ToLowerInvariant()}"),
-            };
-
-            if (parameter.Enum.Count > 0 && !parameter.Enum.Contains((string)converted, StringComparer.Ordinal))
-                throw new ArgumentException($"'{parameter.Name}' must be one of: {string.Join(", ", parameter.Enum)}");
-
-            if (converted is long or double)
-            {
-                var number = Convert.ToDouble(converted, CultureInfo.InvariantCulture);
-                if (parameter.Minimum is { } min && number < min)
-                    throw new ArgumentException($"'{parameter.Name}' must be ≥ {min.ToString(CultureInfo.InvariantCulture)}");
-                if (parameter.Maximum is { } max && number > max)
-                    throw new ArgumentException($"'{parameter.Name}' must be ≤ {max.ToString(CultureInfo.InvariantCulture)}");
-            }
-
-            bound[parameter.Name] = converted;
-        }
-
-        return bound;
-    }
-
-    private static CallToolResult Error(string message) => new()
+    internal static CallToolResult Error(string message) => new()
     {
         IsError = true,
         Content = [new TextContentBlock { Text = message }],

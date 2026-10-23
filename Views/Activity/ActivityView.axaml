@@ -1,0 +1,236 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:SysInfo.ViewModels.Activity"
+             xmlns:m="using:SysInfo.Models"
+             xmlns:c="using:SysInfo.Controls"
+             x:Class="SysInfo.Views.Activity.ActivityView"
+             x:DataType="vm:ActivityViewModel">
+
+    <UserControl.Styles>
+        <!-- Journal en direct : mono, commande en accent, avertissement et erreur colorés -->
+        <Style Selector="Border.Log">
+            <Setter Property="Background" Value="{DynamicResource Background}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource Border}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="{StaticResource RadiusMd}" />
+            <Setter Property="Padding" Value="12,8" />
+        </Style>
+        <Style Selector="TextBlock.LogText">
+            <Setter Property="FontFamily" Value="{StaticResource FontMono}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+        </Style>
+        <Style Selector="TextBlock.LogText.Command">
+            <Setter Property="Foreground" Value="{DynamicResource Accent}" />
+        </Style>
+        <Style Selector="TextBlock.LogText.Warning">
+            <Setter Property="Foreground" Value="{DynamicResource Warning}" />
+        </Style>
+        <Style Selector="TextBlock.LogText.Error">
+            <Setter Property="Foreground" Value="{DynamicResource Danger}" />
+        </Style>
+        <Style Selector="TextBlock.LogTime">
+            <Setter Property="FontFamily" Value="{StaticResource FontMono}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
+            <Setter Property="Margin" Value="0,0,12,0" />
+        </Style>
+        <!-- Ligne d'historique : toute la ligne est cliquable -->
+        <Style Selector="Button.HistoryRow">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="MinHeight" Value="{StaticResource RowHeight}" />
+            <Setter Property="FontWeight" Value="Normal" />
+        </Style>
+        <Style Selector="Button.HistoryRow:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource SurfaceHover}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+        </Style>
+        <Style Selector="TextBlock.State">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+        </Style>
+        <Style Selector="TextBlock.State.Warning">
+            <Setter Property="Foreground" Value="{DynamicResource Warning}" />
+        </Style>
+        <Style Selector="TextBlock.State.Failed">
+            <Setter Property="Foreground" Value="{DynamicResource Danger}" />
+        </Style>
+    </UserControl.Styles>
+
+    <UserControl.Resources>
+        <!-- Une ligne du journal : heure, texte -->
+        <DataTemplate x:Key="LogLine" x:DataType="vm:ActivityLine">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Left" Classes="LogTime" Text="{Binding TimeText}" />
+                <SelectableTextBlock Classes="LogText" Classes.Command="{Binding IsCommand}"
+                                     Classes.Warning="{Binding IsWarning}" Classes.Error="{Binding IsError}"
+                                     Text="{Binding Text}" />
+            </DockPanel>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <DockPanel>
+
+        <!-- En-tête : icône, titre, nombre de tâches en cours ; Actualiser l'historique -->
+        <Border DockPanel.Dock="Top"
+                Height="{StaticResource HeaderHeight}"
+                Padding="{StaticResource HeaderPadding}"
+                BorderBrush="{DynamicResource Border}"
+                BorderThickness="0,0,0,1">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Classes="Ghost Icon" Command="{Binding ReloadCommand}"
+                        ToolTip.Tip="Actualiser l'historique" AutomationProperties.Name="Actualiser l'historique"
+                        VerticalAlignment="Center">
+                    <PathIcon Data="{StaticResource Icon.arrow_clockwise}" />
+                </Button>
+                <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space12}" VerticalAlignment="Center">
+                    <Border Classes="PageIcon">
+                        <PathIcon Data="{StaticResource Icon.pulse}" />
+                    </Border>
+                    <TextBlock Classes="PageTitle" Text="Activité" VerticalAlignment="Center" />
+                    <TextBlock Classes="Body" Foreground="{DynamicResource TextMuted}" Text="{Binding RunningText}"
+                               VerticalAlignment="Center" Margin="0,3,0,0" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <ScrollViewer Padding="{StaticResource PagePadding}">
+            <StackPanel Spacing="{StaticResource Space16}">
+
+                <!-- En cours : lancé depuis la fenêtre (journal en direct) ou par un agent IA -->
+                <Border Classes="Card">
+                    <StackPanel Spacing="{StaticResource Space12}">
+                        <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space8}">
+                            <PathIcon Classes="CardIcon" Data="{StaticResource Icon.play}" />
+                            <TextBlock Classes="CardTitle" Text="En cours" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <TextBlock Classes="Caption" IsVisible="{Binding !HasRunning}"
+                                   Text="Rien en cours. Les outils lancés depuis la carte « Outils » d'un module, et les tâches longues demandées par un agent IA, s'affichent ici avec leur progression." TextWrapping="Wrap" />
+
+                        <ItemsControl ItemsSource="{Binding Running}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Spacing="{StaticResource Space16}" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ActivityRecordViewModel">
+                                    <c:AnimatedHeight AnimateOnLoad="True">
+                                        <StackPanel Spacing="{StaticResource Space8}">
+                                            <DockPanel>
+                                                <Button DockPanel.Dock="Right" Classes="Small" Content="Arrêter"
+                                                        Command="{Binding CancelCommand}" IsVisible="{Binding CanCancel}" />
+                                                <StackPanel Spacing="2">
+                                                    <TextBlock Classes="Value" Text="{Binding Title}" />
+                                                    <TextBlock Classes="Caption">
+                                                        <Run Text="{Binding Kind}" /><Run Text=" · lancé à " /><Run Text="{Binding StartedText}" /><Run Text=" · depuis " /><Run Text="{Binding ElapsedText}" />
+                                                    </TextBlock>
+                                                </StackPanel>
+                                            </DockPanel>
+                                            <ProgressBar IsIndeterminate="{Binding !HasPercent}" Value="{Binding Percent}" Maximum="100" Height="4" MinHeight="4" />
+                                            <TextBlock Classes="Body" Foreground="{DynamicResource TextSecondary}" Text="{Binding Status}" TextWrapping="Wrap" />
+                                            <Border Classes="Log">
+                                                <c:TailScrollViewer MaxHeight="220" HorizontalScrollBarVisibility="Disabled">
+                                                    <ItemsControl ItemsSource="{Binding Lines}" ItemTemplate="{StaticResource LogLine}" />
+                                                </c:TailScrollViewer>
+                                            </Border>
+                                        </StackPanel>
+                                    </c:AnimatedHeight>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <ItemsControl ItemsSource="{Binding External}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Spacing="{StaticResource Space8}" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ExternalTaskViewModel">
+                                    <StackPanel Spacing="{StaticResource Space8}">
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Classes="Value" Text="{Binding Title}" />
+                                            <TextBlock Classes="Caption">
+                                                <Run Text="{Binding Origin}" /><Run Text=" · lancé à " /><Run Text="{Binding StartedText}" /><Run Text=" · depuis " /><Run Text="{Binding ElapsedText}" />
+                                            </TextBlock>
+                                        </StackPanel>
+                                        <ProgressBar IsIndeterminate="True" Height="4" MinHeight="4" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <!-- Historique : journal d'audit (fenêtre et agents IA) ; un clic déplie le détail -->
+                <Border Classes="Card">
+                    <StackPanel Spacing="{StaticResource Space8}">
+                        <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space8}" Margin="0,0,0,4">
+                            <PathIcon Classes="CardIcon" Data="{StaticResource Icon.timer}" />
+                            <TextBlock Classes="CardTitle" Text="Historique" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <TextBlock Classes="Caption" IsVisible="{Binding !HasHistory}" TextWrapping="Wrap"
+                                   Text="Rien pour l'instant : chaque outil lancé (fenêtre ou agent IA) et chaque action apparaîtra ici." />
+
+                        <ItemsControl ItemsSource="{Binding History}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:HistoryItemViewModel">
+                                    <StackPanel>
+                                        <Button Classes="HistoryRow" Command="{Binding ToggleCommand}"
+                                                AutomationProperties.Name="{Binding Title}">
+                                            <Grid ColumnDefinitions="72,*,Auto,Auto,72,Auto" ColumnSpacing="12">
+                                                <TextBlock Classes="LogTime" Text="{Binding TimeText}" VerticalAlignment="Center" Margin="0" />
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,6">
+                                                    <TextBlock Classes="Body" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Classes="Caption">
+                                                        <Run Text="{Binding Origin}" /><Run Text=" · " /><Run Text="{Binding Kind}" />
+                                                    </TextBlock>
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="2" Classes="Body State" Classes.Warning="{Binding IsWarning}"
+                                                           Classes.Failed="{Binding IsFailed}" Text="{Binding StatusText}" VerticalAlignment="Center" />
+                                                <TextBlock Grid.Column="4" Classes="Caption" Text="{Binding DurationText}"
+                                                           VerticalAlignment="Center" HorizontalAlignment="Right" />
+                                                <PathIcon Grid.Column="5" Classes="MoreChevron" Classes.Open="{Binding IsExpanded}"
+                                                          Data="{StaticResource Icon.chevron_down}" />
+                                            </Grid>
+                                        </Button>
+                                        <c:AnimatedHeight IsCollapsed="{Binding !IsExpanded}">
+                                            <StackPanel Spacing="{StaticResource Space8}" Margin="92,4,8,12">
+                                                <ItemsControl ItemsSource="{Binding Details}" Grid.IsSharedSizeScope="True">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="m:KeyValueItem">
+                                                            <Grid Margin="0,0,0,4">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="Auto" SharedSizeGroup="Key" />
+                                                                    <ColumnDefinition Width="*" />
+                                                                </Grid.ColumnDefinitions>
+                                                                <TextBlock Classes="Caption" Text="{Binding Key}" Margin="0,0,16,0" />
+                                                                <SelectableTextBlock Grid.Column="1" Classes="Body" Text="{Binding Value}" TextWrapping="Wrap" />
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                                <Border Classes="Log" IsVisible="{Binding HasLines}">
+                                                    <ScrollViewer MaxHeight="260" HorizontalScrollBarVisibility="Disabled">
+                                                        <ItemsControl ItemsSource="{Binding Lines}" ItemTemplate="{StaticResource LogLine}" />
+                                                    </ScrollViewer>
+                                                </Border>
+                                            </StackPanel>
+                                        </c:AnimatedHeight>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+
+</UserControl>

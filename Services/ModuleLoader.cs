@@ -117,6 +117,11 @@ public static partial class ModuleLoader
             return "description manquante";
         if (!Regex.IsMatch(script, $@"(?im)^\s*function\s+{Regex.Escape(function.Command)}\b"))
             return $"fonction {function.Command} absente du .psm1";
+        // An action always offers a preview: -DryRun returns what would change, without changing anything.
+        if (function.IsAction && !Regex.IsMatch(script, @"(?i)\[switch\]\s*\$DryRun\b"))
+            return $"action de niveau {function.Level} sans paramètre [switch]$DryRun";
+        if (function.TimeoutSeconds < 0)
+            return "timeoutSeconds négatif";
 
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var parameter in function.Parameters)
@@ -125,6 +130,8 @@ public static partial class ModuleLoader
                 return $"paramètre « {parameter.Name} » invalide (camelCase)";
             if (!names.Add(parameter.Name))
                 return $"paramètre « {parameter.Name} » en double";
+            if (parameter.Name.Equals(FunctionArguments.DryRun, StringComparison.OrdinalIgnoreCase))
+                return $"paramètre « {parameter.Name} » réservé (aperçu des actions)";
             if (parameter.Enum.Count > 0 && parameter.Type != ParameterType.String)
                 return $"paramètre « {parameter.Name} » : enum réservé au type string";
         }

@@ -1,0 +1,128 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:SysInfo.ViewModels"
+        xmlns:m="using:SysInfo.Models"
+        xmlns:conv="using:SysInfo.Converters"
+        x:Class="SysInfo.Views.ConfirmWindow"
+        x:DataType="vm:ConfirmViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="SysInfo · Confirmer une action"
+        Width="680" SizeToContent="Height" MaxHeight="820" MinWidth="520"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource Background}"
+        Foreground="{DynamicResource TextPrimary}">
+
+    <!-- Confirmation d'une action : qui la demande, laquelle, ses paramètres, puis son aperçu (-DryRun).
+         « Refuser » est le bouton par défaut (Entrée, Échap) ; « Exécuter » attend l'aperçu. -->
+    <DockPanel Margin="{StaticResource PagePadding}">
+
+        <StackPanel DockPanel.Dock="Top" Spacing="{StaticResource Space8}" Margin="0,0,0,16">
+            <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space8}">
+                <Border Classes="Badge Warning" Classes.Critical="{Binding IsCritical}">
+                    <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space4}">
+                        <PathIcon Data="{StaticResource Icon.warning}" />
+                        <TextBlock Classes="Caption" Text="{Binding LevelText}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+                <TextBlock Classes="Caption" Text="{Binding ModuleTitle}" VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBlock Classes="PageTitle" Text="{Binding ActionTitle}" TextWrapping="Wrap" />
+            <TextBlock Classes="Body" Foreground="{DynamicResource TextSecondary}" Text="{Binding Origin}" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <!-- Pied : accusé de lecture (action critique), délai restant, Refuser, Exécuter -->
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,16,0,0">
+            <CheckBox DockPanel.Dock="Top" Margin="0,0,0,12" IsVisible="{Binding NeedsAcknowledge}"
+                      IsChecked="{Binding Acknowledged}"
+                      Content="J'ai lu l'aperçu et je comprends que cette action modifie le système." />
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="{StaticResource Space8}">
+                <Button Content="Refuser" Command="{Binding DeclineCommand}" IsDefault="True" IsCancel="True" />
+                <Button Classes="Primary" Content="Exécuter" Command="{Binding ConfirmCommand}" />
+            </StackPanel>
+            <TextBlock Classes="Caption" Text="{Binding Countdown}" IsVisible="{Binding HasCountdown}" VerticalAlignment="Center" />
+        </DockPanel>
+
+        <ScrollViewer>
+            <StackPanel Spacing="{StaticResource Space16}">
+
+                <Border Classes="Card" IsVisible="{Binding HasParameters}">
+                    <StackPanel Spacing="{StaticResource Space12}">
+                        <TextBlock Classes="CardTitle" Text="Paramètres" />
+                        <ItemsControl ItemsSource="{Binding Parameters}" Grid.IsSharedSizeScope="True">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Spacing="{StaticResource Space8}" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="m:KeyValueItem">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" SharedSizeGroup="Key" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Classes="Body" Text="{Binding Key}" Foreground="{DynamicResource TextSecondary}" Margin="0,0,24,0" />
+                                        <SelectableTextBlock Grid.Column="1" Classes="Value" Text="{Binding Value}" TextWrapping="Wrap" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Classes="Caption" Text="Calcul de l'aperçu…" IsVisible="{Binding IsLoading}" />
+
+                <!-- Aperçu : résumé, raison du blocage, constats, modifications prévues et sections -->
+                <StackPanel Spacing="{StaticResource Space16}" IsVisible="{Binding ShowPreview}">
+                    <SelectableTextBlock Classes="Body" Text="{Binding Summary}" TextWrapping="Wrap" />
+
+                    <Border Classes="Card" IsVisible="{Binding IsBlocked}">
+                        <DockPanel>
+                            <PathIcon DockPanel.Dock="Left" Width="16" Height="16" Margin="0,2,12,0" VerticalAlignment="Top"
+                                      Data="{StaticResource Icon.error_circle}" Foreground="{DynamicResource Danger}" />
+                            <StackPanel Spacing="{StaticResource Space4}">
+                                <TextBlock Classes="CardTitle" Text="Action impossible" />
+                                <SelectableTextBlock Classes="Body" Text="{Binding BlockedReason}" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+
+                    <!-- Action critique : point de restauration créé avant (ou pourquoi aucun) -->
+                    <Border Classes="Card" IsVisible="{Binding HasRestorePoint}">
+                        <DockPanel>
+                            <Panel DockPanel.Dock="Left" Margin="0,2,12,0" VerticalAlignment="Top">
+                                <PathIcon Width="16" Height="16" Data="{StaticResource Icon.checkmark_circle}"
+                                          Foreground="{DynamicResource Success}" IsVisible="{Binding RestorePointAvailable}" />
+                                <PathIcon Width="16" Height="16" Data="{StaticResource Icon.warning}"
+                                          Foreground="{DynamicResource Warning}" IsVisible="{Binding !RestorePointAvailable}" />
+                            </Panel>
+                            <StackPanel Spacing="{StaticResource Space4}">
+                                <TextBlock Classes="CardTitle" Text="Point de restauration" />
+                                <SelectableTextBlock Classes="Body" Text="{Binding RestorePointText}" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+
+                    <Border Classes="Card" IsVisible="{Binding HasFindings}">
+                        <ItemsControl ItemsSource="{Binding Findings}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Spacing="{StaticResource Space12}" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </Border>
+
+                    <ItemsControl ItemsSource="{Binding Sections}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Spacing="{StaticResource Space12}" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+
+</Window>

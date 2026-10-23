@@ -42,6 +42,13 @@ public sealed class LineChart : Control
     public static readonly StyledProperty<double> MaximumProperty =
         AvaloniaProperty.Register<LineChart, double>(nameof(Maximum), double.NaN);
 
+    /// <summary>
+    /// Time covered by the chart (refresh interval × (Capacity − 1)). When set, samples are placed by their time, not
+    /// their rank: a page refreshed less often while hidden leaves wider gaps instead of a squeezed time axis.
+    /// </summary>
+    public static readonly StyledProperty<TimeSpan> WindowProperty =
+        AvaloniaProperty.Register<LineChart, TimeSpan>(nameof(Window));
+
     public static readonly StyledProperty<int> CapacityProperty =
         AvaloniaProperty.Register<LineChart, int>(nameof(Capacity), 60);
 
@@ -80,7 +87,7 @@ public sealed class LineChart : Control
 
     static LineChart()
     {
-        AffectsRender<LineChart>(ValuesProperty, Values2Property, Label1Property, Label2Property, Stroke2Property, TimesProperty, MaximumProperty, CapacityProperty, UnitProperty,
+        AffectsRender<LineChart>(ValuesProperty, Values2Property, Label1Property, Label2Property, Stroke2Property, TimesProperty, WindowProperty, MaximumProperty, CapacityProperty, UnitProperty,
             StrokeProperty, FillProperty, GridBrushProperty, LabelBrushProperty, TextBrushProperty, CursorBrushProperty,
             SurfaceBrushProperty, TipBackgroundProperty, TipBorderProperty, LabelFontProperty);
     }
@@ -91,6 +98,7 @@ public sealed class LineChart : Control
     public string? Label2 { get => GetValue(Label2Property); set => SetValue(Label2Property, value); }
     public IBrush? Stroke2 { get => GetValue(Stroke2Property); set => SetValue(Stroke2Property, value); }
     public IReadOnlyList<DateTime>? Times { get => GetValue(TimesProperty); set => SetValue(TimesProperty, value); }
+    public TimeSpan Window { get => GetValue(WindowProperty); set => SetValue(WindowProperty, value); }
     public double Maximum { get => GetValue(MaximumProperty); set => SetValue(MaximumProperty, value); }
     public int Capacity { get => GetValue(CapacityProperty); set => SetValue(CapacityProperty, value); }
     public string? Unit { get => GetValue(UnitProperty); set => SetValue(UnitProperty, value); }
@@ -179,7 +187,12 @@ public sealed class LineChart : Control
         var times = Times;
         var labelsY = plot.Bottom + 4;
         DrawText(context, "maintenant", LabelBrush, new Point(plot.Right, labelsY), alignRight: true);
-        if (times is { Count: > 1 } && count > 1)
+        var timed = Window > TimeSpan.Zero && times is { } tt && tt.Count >= count;
+        if (timed)
+        {
+            DrawText(context, FormatAgo(Window), LabelBrush, new Point(plot.Left, labelsY));
+        }
+        else if (times is { Count: > 1 } && count > 1)
         {
             var span = times[^1] - times[Math.Max(0, times.Count - count)];
             // The axis is laid out for Capacity samples: extrapolate the left edge from the mean interval.
@@ -191,18 +204,37 @@ public sealed class LineChart : Control
             return;
 
         var dx = plot.Width / Math.Max(1, Capacity - 1);
-        double XOf(int i) => plot.Right - (count - 1 - i) * dx;
+        var lastTime = timed ? times![^1] : default;
+        var offset = timed ? times!.Count - count : 0;
+        // By time when the window is known (samples may be uneven), else one step per sample.
+        double XOf(int i) => timed
+            ? plot.Right - (lastTime - times![offset + i]).TotalSeconds / Window.TotalSeconds * plot.Width
+            : plot.Right - (count - 1 - i) * dx;
         double ValueAt(IReadOnlyList<double> series, int i) => series[series.Count - count + i];
 
-        DrawSeries(context, values, count, XOf, YOf, plot.Bottom, Stroke, Fill);
-        if (values2 is not null)
-            DrawSeries(context, values2, count, XOf, YOf, plot.Bottom, Stroke2, null);
+        // Samples older than the window fall left of the plot: clipped.
+        using (context.PushClip(new Rect(plot.Left, 0, plot.Width + StrokeThickness, Bounds.Height)))
+        {
+            DrawSeries(context, values, count, XOf, YOf, plot.Bottom, Stroke, Fill);
+            if (values2 is not null)
+                DrawSeries(context, values2, count, XOf, YOf, plot.Bottom, Stroke2, null);
+        }
 
         // Hover: nearest sample under the pointer.
         if (_pointer is not { } pointer || pointer.X < plot.Left - dx / 2)
             return;
-        var index = (int)Math.Round((count - 1) - (plot.Right - pointer.X) / dx);
-        if (index < 0 || index >= count)
+        var index = -1;
+        var nearest = double.MaxValue;
+        for (var i = 0; i < count; i++)
+        {
+            var distance = Math.Abs(XOf(i) - pointer.X);
+            if (XOf(i) >= plot.Left - 1 && distance < nearest)
+            {
+                nearest = distance;
+                index = i;
+            }
+        }
+        if (index < 0)
             return;
 
         var x = Math.Round(XOf(index)) + 0.5;

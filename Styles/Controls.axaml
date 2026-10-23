@@ -207,6 +207,70 @@
         <Setter Property="BorderBrush" Value="Transparent" />
     </Style>
 
+    <!-- Bord d'en-tête de tableau : zone de 8 px à cheval sur le filet de colonne ; trait Accent au survol et en glissant -->
+    <Style Selector="Thumb.ColumnResizer">
+        <Setter Property="Width" Value="8" />
+        <Setter Property="Margin" Value="0,0,-4,0" />
+        <Setter Property="Cursor" Value="SizeWestEast" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="Transparent">
+                    <Border Name="PART_Line" Width="2" HorizontalAlignment="Center" Margin="0,4,0,10"
+                            CornerRadius="1" Background="{DynamicResource Border}" Opacity="0.6" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="Thumb.ColumnResizer:pointerover /template/ Border#PART_Line, Thumb.ColumnResizer:pressed /template/ Border#PART_Line">
+        <Setter Property="Background" Value="{DynamicResource Accent}" />
+        <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <!-- « Voir plus » en bas d'une carte : fantôme compact, toute la largeur, chevron qui pivote quand c'est ouvert -->
+    <Style Selector="Button.More">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="MinHeight" Value="{StaticResource ControlHeightCompact}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Margin" Value="0,4,0,0" />
+    </Style>
+    <Style Selector="Button.More:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.More:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource SurfaceHover}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+    </Style>
+    <Style Selector="PathIcon.MoreChevron">
+        <Setter Property="Width" Value="12" />
+        <Setter Property="Height" Value="12" />
+        <Setter Property="RenderTransform" Value="rotate(0deg)" />
+    </Style>
+    <Style Selector=":is(Control).Animate PathIcon.MoreChevron">
+        <Setter Property="Transitions">
+            <Transitions>
+                <TransformOperationsTransition Property="RenderTransform" Duration="{StaticResource DurationBase}" />
+            </Transitions>
+        </Setter>
+    </Style>
+    <Style Selector="PathIcon.MoreChevron.Open">
+        <Setter Property="RenderTransform" Value="rotate(180deg)" />
+    </Style>
+
+    <!-- Contenu d'une page : fondu à l'arrivée des données (après le squelette) -->
+    <Style Selector=":is(Control).Animate ItemsControl.Blocks">
+        <Setter Property="Transitions">
+            <Transitions>
+                <DoubleTransition Property="Opacity" Duration="0:0:0.25" />
+            </Transitions>
+        </Setter>
+    </Style>
+    <Style Selector="ItemsControl.Blocks.Loading">
+        <Setter Property="Opacity" Value="0" />
+    </Style>
+
     <!-- Icône seule : carré ControlHeight ; ajouter ToolTip.Tip et AutomationProperties.Name -->
     <Style Selector="Button.Icon, ToggleButton.Icon">
         <Setter Property="Width" Value="{StaticResource ControlHeight}" />

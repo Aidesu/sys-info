@@ -9,5 +9,40 @@
     "linux"
   ],
   "requiresAdmin": false,
-  "description": "Hardware of this computer: live GPU usage, video memory and GPU temperature when the driver exposes them (NVIDIA, AMD); motherboard (vendor, model, serial number when readable), BIOS/UEFI (vendor, version, date, boot mode, Secure Boot), TPM (present, version, state); graphics cards (video memory, driver, version); connected displays (name, vendor, connector, native or current resolution, size in inches, year); audio devices (outputs and inputs, default device, state); connected USB devices (name, vendor, VID:PID, speed) and connected Bluetooth devices; installed RAM (total, used and free slots, maximum capacity, type, speed, each module with size, speed, manufacturer and part number); device drivers (device, category, provider or driver, version, date or origin, signed); and devices in error or without a driver with the reason. Findings flag a hot GPU, a missing or old TPM, unsigned or very old drivers, and devices in error."
+  "description": "Hardware of this computer: live GPU usage, video memory and GPU temperature when the driver exposes them (NVIDIA, AMD); motherboard (vendor, model, serial number when readable), BIOS/UEFI (vendor, version, date, boot mode, Secure Boot), TPM (present, version, state); graphics cards (video memory, driver, version); connected displays (name, vendor, connector, native or current resolution, size in inches, year); audio devices (outputs and inputs, default device, state); connected USB devices (name, vendor, VID:PID, speed) and connected Bluetooth devices; installed RAM (total, used and free slots, maximum capacity, type, speed, each module with size, speed, manufacturer and part number); device drivers (device, category, provider or driver, version, date or origin, signed); and devices in error or without a driver with the reason. Findings flag a hot GPU, a missing or old TPM, unsigned or very old drivers, and devices in error.",
+  "functions": [
+    {
+      "name": "list_devices",
+      "title": "Liste des périphériques",
+      "command": "Get-SIDevices",
+      "level": "L",
+      "description": "Devices of this computer with their identifier (to pass to hardware_set_device and hardware_reinstall_driver), category, driver, enabled state and problem. Windows: Plug and Play devices (InstanceId). Linux: PCI devices (pci:<slot>) and USB devices (usb:<port>).",
+      "parameters": [
+        { "name": "filter", "label": "Texte", "type": "string", "description": "Keep only devices whose name, category, driver or identifier contains this text." },
+        { "name": "problemOnly", "label": "En erreur seulement", "type": "boolean", "description": "Only devices in error or disabled.", "default": false },
+        { "name": "top", "label": "Nombre max.", "type": "integer", "description": "Maximum number of devices returned.", "minimum": 1, "maximum": 2000, "default": 200 }
+      ]
+    },
+    {
+      "name": "set_device",
+      "title": "Désactiver / réactiver un périphérique",
+      "command": "Set-SIDevice",
+      "level": "C",
+      "description": "Disables or re-enables one device. Windows: Disable-PnpDevice / Enable-PnpDevice (never system, storage, processor, keyboard or mouse devices). Linux: USB devices only, through the USB authorized flag (never keyboards, mice or other input devices). Reversible with the same action.",
+      "parameters": [
+        { "name": "deviceId", "label": "Identifiant", "type": "string", "description": "Device identifier from hardware_list_devices.", "required": true },
+        { "name": "enabled", "label": "Activé", "type": "boolean", "description": "false to disable, true to re-enable.", "required": true }
+      ]
+    },
+    {
+      "name": "reinstall_driver",
+      "title": "Réinstaller un pilote",
+      "command": "Update-SIDriver",
+      "level": "C",
+      "description": "Reinstalls the driver of one device, for a device that stopped working. Windows: pnputil /remove-device then /scan-devices (Windows re-detects the device and installs its driver). Linux: unloads and reloads the device's kernel module (modprobe -r / modprobe); never display, storage, USB controller, input or file system drivers, built-in drivers or modules in use by others.",
+      "parameters": [
+        { "name": "deviceId", "label": "Identifiant", "type": "string", "description": "Device identifier from hardware_list_devices.", "required": true }
+      ]
+    }
+  ]
 }
