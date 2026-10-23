@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
@@ -8,7 +9,8 @@ using System.Threading.Tasks;
 namespace SysInfo.Services;
 
 /// <summary>
-/// Runs a module's Get-ModuleData in a dedicated runspace, reused across refreshes.
+/// Runs a module's public functions (Get-ModuleData and declared functions) in a dedicated runspace,
+/// reused across refreshes.
 /// </summary>
 public sealed class PowerShellService : IDisposable
 {
@@ -27,7 +29,13 @@ public sealed class PowerShellService : IDisposable
         _runspace.Open();
     }
 
-    public async Task<PSObject> GetModuleDataAsync()
+    public Task<PSObject> GetModuleDataAsync() => InvokeAsync("Get-ModuleData");
+
+    /// <summary>
+    /// Runs one public function of the module (Get-ModuleData or a function declared in module.json),
+    /// with named parameters (-Top 20…). Calls are serialized: the runspace runs one command at a time.
+    /// </summary>
+    public async Task<PSObject> InvokeAsync(string command, IReadOnlyDictionary<string, object?>? parameters = null)
     {
         await _lock.WaitAsync();
         try
@@ -35,7 +43,9 @@ public sealed class PowerShellService : IDisposable
             return await Task.Run(() =>
             {
                 using var ps = PowerShell.Create(_runspace);
-                ps.AddCommand("Get-ModuleData");
+                ps.AddCommand(command);
+                foreach (var (name, value) in parameters ?? new Dictionary<string, object?>())
+                    ps.AddParameter(name, value);
                 var result = ps.Invoke().FirstOrDefault();
 
                 if (result is null)

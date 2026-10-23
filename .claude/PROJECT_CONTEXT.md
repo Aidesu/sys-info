@@ -44,8 +44,10 @@ SysInfo/
 │   ├─ PowerShellService.cs        → exécution PowerShell (runspace réutilisé)
 │   └─ ModuleLoader.cs             → découverte et chargement des modules
 ├─ Models/
-│   ├─ ModuleManifest.cs           → lecture de module.json
-│   └─ Section.cs                  → types de sections affichables
+│   ├─ ModuleManifest.cs           → lecture de module.json (fonctions, paramètres, niveaux)
+│   ├─ Section.cs                  → types de sections affichables
+│   └─ Finding.cs                  → constats normalisés (§4.3)
+├─ Mcp/                            → serveur MCP (`SysInfo --mcp`) : outils, enveloppe, descriptions
 ├─ Modules/                        → UN DOSSIER PAR MODULE
 │   ├─ CPU/
 │   │   ├─ module.json
@@ -75,7 +77,8 @@ Le dossier `Modules/` est copié à côté de l'exécutable (`CopyToOutputDirect
   "refreshSeconds": 2,
   "platforms": ["windows", "linux"],
   "requiresAdmin": false,
-  "description": "CPU model, core count, current usage and per-core load."
+  "description": "CPU model, core count, current usage and per-core load.",
+  "functions": [ … ]
 }
 ```
 
@@ -89,10 +92,11 @@ Le dossier `Modules/` est copié à côté de l'exécutable (`CopyToOutputDirect
 | `platforms` | OS supportés : `windows`, `linux` |
 | `requiresAdmin` | `true` si des droits élevés sont nécessaires |
 | `description` | facultatif, **en anglais** : ce que renvoie le module. Sert de description à l'outil MCP `get_<id>` (c'est elle qui permet à l'IA de choisir l'outil) ; à défaut, une description générique est construite à partir du titre. Ajouté au contrat le 2026-10-22. |
+| `functions` | facultatif : fonctions ciblées du module, avec paramètres, exposées en MCP (§4.4). Ajouté le 2026-10-23. |
 
 ### 4.2 Le `.psm1`
 
-Chaque module expose **une seule fonction publique** : `Get-ModuleData`.
+Chaque module expose `Get-ModuleData` (la vue d'ensemble, affichée dans l'onglet) et, s'il en déclare dans `module.json`, ses **fonctions ciblées** (§4.4). Aucune autre fonction publique : `Export-ModuleMember -Function Get-ModuleData, Get-SI…`.
 
 - Elle gère elle-même les différences d'OS avec `$IsWindows` / `$IsLinux`.
 - Elle **retourne des objets**, jamais de texte formaté : pas de `Write-Host`, pas de `Format-Table`.
@@ -158,7 +162,68 @@ Un nouveau type de section = modification du C# (Model + DataTemplate). Ne pas e
 
 **`Usage`** (ajouté au contrat le 2026-10-22, module Stockage) : `Items` = liste d'éléments `@{ Label; Detail; Value; Max; Unit; Warning; Critical; Text }` — `Label` (ex. `/`), `Detail` sous le libellé (`btrfs · nvme0n1p3`), `Value` sur `Max` dans `Unit`, seuils facultatifs dans la même unité, `Text` libre sous la valeur (« 100 GiB libres sur 1,8 TiB »). L'état le plus grave des lignes remonte sur l'onglet.
 
+**`Findings`** (à côté de `Sections`, ajouté au contrat le 2026-10-23) : constats normalisés, ce qui demande attention ou action.
+
+```powershell
+Findings = @(
+    [PSCustomObject]@{
+        Severity       = 'warning'            # info | warning | critical
+        Code           = 'STO-VOLUME-FULL'    # stable : <MODULE>-<SUJET>, majuscules
+        Message        = '/ rempli à 94 % (93,1 GiB libres)'
+        Recommendation = "Libérer de l'espace : fichiers temporaires, corbeille, caches."   # facultatif
+    }
+)
+```
+
+- Un **code ne change jamais** une fois publié : l'IA agrège et priorise par code. Préfixe = module (`SYS`, `HW`, `NET`, `STO`, `EVT`, `SVC`, `SEC`…).
+- Textes en français, déjà rédigés. Un constat par objet concerné (un par volume, un par disque).
+- Affichage : carte « Constats » en tête de page, les plus graves d'abord ; `warning` / `critical` remontent sur l'onglet (avec les seuils des Metric et Usage). `info` ne colore rien.
+- MCP : `status` de l'enveloppe = constat le plus grave (`ok`, `warning`, `critical`).
+- Un constat sans `Severity` valide, `Code` ou `Message` est ignoré et signalé sur stderr.
+
 **`Table`** : `Columns` (libellés) et `Rows` (un tableau de valeurs par ligne, dans l'ordre des colonnes). Une colonne dont toutes les valeurs sont des nombres est alignée à droite, en mono, et formatée à la française ; renvoyer des **nombres**, pas des chaînes déjà formatées, pour qu'elle trie correctement.
+
+### 4.4 Fonctions ciblées (ajouté le 2026-10-23)
+
+`Get-ModuleData` reste la vue d'ensemble de l'onglet. Ce qui demande des paramètres, ou serait trop volumineux pour la vue d'ensemble (liste complète des processus, journal filtré…), devient une **fonction ciblée**, déclarée dans `module.json` :
+
+```json
+"functions": [
+  {
+    "name": "get_processes",
+    "command": "Get-SIProcesses",
+    "level": "L",
+    "description": "Running processes of this computer, sorted and filtered: …",
+    "platforms": ["windows", "linux"],
+    "requiresAdmin": false,
+    "dependencies": [],
+    "parameters": [
+      { "name": "top", "type": "integer", "description": "Number of processes returned.", "minimum": 1, "maximum": 500, "default": 20 },
+      { "name": "sortBy", "type": "string", "enum": ["cpu", "memory", "name"], "default": "cpu", "description": "…" },
+      { "name": "filter", "type": "string", "description": "…" }
+    ]
+  }
+]
+```
+
+| Champ | Rôle |
+|---|---|
+| `name` | snake_case ; outil MCP `<id>_<name>` (ex. `system_get_processes`) |
+| `command` | fonction PowerShell du `.psm1`, nommée `<Verbe>-SI<Nom>` (ex. `Get-SIProcesses`), exportée |
+| `level` | `L` lecture · `A` action réversible · `C` action critique · `X` jamais en MCP. **Seul `L` est exposé pour l'instant** (A/C : sprint S4, avec confirmation dans l'UI et audit) |
+| `description` | en anglais, obligatoire : ce que renvoie la fonction et quand l'utiliser |
+| `platforms` | facultatif, sous-ensemble de ceux du module ; vide = ceux du module |
+| `requiresAdmin` | facultatif ; refus explicite (erreur MCP) si l'app n'est pas élevée |
+| `dependencies` | facultatif : outils externes utilisés s'ils sont présents (`smartctl`, `nvidia-smi`…). Absent → la fonction marche quand même et renvoie un constat `info` « installer X pour activer » |
+| `parameters` | `name` (camelCase = paramètre PowerShell), `type` (`string`, `integer`, `number`, `boolean`), `description`, `required`, `enum` (string), `minimum` / `maximum`, `default` (documentaire : la fonction PowerShell applique sa propre valeur par défaut) |
+
+Règles :
+
+- Même forme de retour que `Get-ModuleData` (`Subtitle`, `Sections`, `Findings`), même runspace, même cache `$script:`.
+- Volume limité par défaut : `top`, `since`, `filter`… pour ne pas noyer le contexte de l'IA.
+- Les arguments sont vérifiés côté C# (type, `enum`, bornes, argument inconnu) avant l'appel ; garder aussi `ValidateRange` / `ValidateSet` côté PowerShell.
+- Une fonction invalide (nom, commande absente du `.psm1`, paramètre mal décrit) est ignorée et signalée ; le module et ses autres fonctions se chargent.
+- **Jamais exposé, même en L** : clés BitLocker / de récupération, mots de passe (Wi-Fi, LAPS…), clés de licence complètes, hashes, contenu des fichiers utilisateurs, historique de navigation. Masquer les secrets évidents des lignes de commande.
 
 ---
 
@@ -188,7 +253,7 @@ Un nouveau type de section = modification du C# (Model + DataTemplate). Ne pas e
 
 1. Créer `Modules/<Nom>/`.
 2. Ajouter `module.json` avec un `id` unique.
-3. Écrire `<Nom>.psm1` avec `Get-ModuleData` au format de la section 4.3.
+3. Écrire `<Nom>.psm1` avec `Get-ModuleData` au format de la section 4.3 (`Findings` pour ce qui demande attention), plus les fonctions ciblées éventuelles (§4.4).
 4. Tester le module seul dans `pwsh` :
    ```powershell
    Import-Module ./Modules/<Nom>/<Nom>.psm1 -Force

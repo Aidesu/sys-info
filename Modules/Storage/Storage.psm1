@@ -423,12 +423,57 @@ function Get-ModuleData {
         $sections.Add([PSCustomObject]@{ Title = 'Erreurs du module'; Type = 'KeyValue'; Icon = 'error_circle'; Items = $errors })
     }
 
+    # Constats (Findings) : ce qui demande une action, avec un code stable pour l'IA
+    $findings = [System.Collections.Generic.List[object]]::new()
+    function Add-Finding([string]$Severity, [string]$Code, [string]$Message, [string]$Recommendation) {
+        $findings.Add([PSCustomObject]@{ Severity = $Severity; Code = $Code; Message = $Message; Recommendation = $Recommendation })
+    }
+    foreach ($v in $volumes) {
+        if ($v.Size -le 0) { continue }
+        $ratio = $v.Used / $v.Size
+        if ($ratio -ge $script:FillWarning) {
+            Add-Finding $(if ($ratio -ge $script:FillCritical) { 'critical' } else { 'warning' }) 'STO-VOLUME-FULL' `
+                ('{0} rempli à {1} % ({2} libres)' -f $v.Mount, [Math]::Floor(100 * $ratio), (Format-Bytes $v.Free)) `
+                'Libérer de l''espace : fichiers temporaires, corbeille, caches, gros dossiers.'
+        }
+    }
+    foreach ($d in $disks) {
+        $s = $script:Smart[$d.Name]
+        if (-not $s) { continue }
+        if ($s.Failing) {
+            Add-Finding 'critical' 'STO-SMART-FAILING' ('{0} ({1}) : SMART signale une défaillance' -f $d.Name, $d.Model) `
+                'Sauvegarder les données sans attendre, puis remplacer le disque.'
+        }
+        $bad = [long]$s.MediaErrors + [long]$s.BadSectors
+        if ($bad -gt 0) {
+            Add-Finding 'warning' 'STO-SMART-MEDIA' ('{0} ({1}) : {2} erreur(s) média ou secteur(s) défectueux' -f $d.Name, $d.Model, $bad) `
+                'Sauvegarder, puis surveiller : un nombre qui augmente annonce une panne.'
+        }
+        if ($null -ne $s.Wear -and $s.Wear -ge 90) {
+            Add-Finding $(if ($s.Wear -ge 100) { 'critical' } else { 'warning' }) 'STO-SSD-WEAR' ('{0} ({1}) usé à {2} %' -f $d.Name, $d.Model, [Math]::Round($s.Wear)) `
+                'Prévoir le remplacement du SSD.'
+        }
+    }
+    foreach ($c in $counters | Where-Object Errors -gt 0) {
+        Add-Finding 'warning' 'STO-FS-ERRORS' ('{0} : {1} erreur(s) de système de fichiers' -f $c.Name, $c.Errors) `
+            'Vérifier le système de fichiers (fsck / chkdsk) au prochain redémarrage.'
+    }
+    if ($script:Events.Count -gt 0) {
+        Add-Finding 'info' 'STO-LOG-ERRORS' ('{0} erreur(s) ou avertissement(s) de stockage dans le journal (7 jours)' -f $script:Events.Count) $null
+    }
+    foreach ($d in $withoutSmart) {
+        Add-Finding 'info' 'STO-SMART-UNAVAILABLE' ('SMART non lisible pour {0} ({1})' -f $d.Name, $d.Kind) `
+            $(if ($d.Kind -eq 'USB') { 'Disque USB : la plupart des boîtiers ne transmettent pas SMART.' }
+              elseif ($IsLinux) { 'Installer smartmontools (smartctl) ou udisks2 pour lire l''état du disque.' }
+              else { 'Disque derrière un contrôleur qui ne transmet pas SMART.' })
+    }
+
     # Sous-titre : nombre de disques, capacité totale, volume racine
     $root = $volumes | Select-Object -First 1
     $subtitle = @('{0} disque(s) · {1}' -f $disks.Count, (Format-Capacity (($disks | Measure-Object -Property Size -Sum).Sum)))
     if ($root) { $subtitle += '{0} : {1} libres' -f $root.Mount, (Format-Bytes $root.Free) }
 
-    [PSCustomObject]@{ Subtitle = $subtitle -join ' · '; Sections = $sections.ToArray() }
+    [PSCustomObject]@{ Subtitle = $subtitle -join ' · '; Sections = $sections.ToArray(); Findings = $findings.ToArray() }
 }
 
 Export-ModuleMember -Function Get-ModuleData

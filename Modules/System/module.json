@@ -9,5 +9,39 @@
     "linux"
   ],
   "requiresAdmin": false,
-  "description": "Live overview of this computer: CPU usage, memory usage and CPU temperature (with warning/critical thresholds), operating system (name, kernel/build, architecture, host name, user, boot time, uptime, process count), CPU model, cores, threads and frequency, memory and swap details, the 15 most active processes (CPU %, memory), and temperature sensors when the OS exposes them."
+  "description": "Live overview of this computer: CPU usage, memory usage and CPU temperature (with warning/critical thresholds), operating system (name, kernel/build, architecture, host name, user, boot time, uptime, process count), CPU model, cores, threads and frequency, memory and swap details, the 15 most active processes (CPU %, memory), and temperature sensors when the OS exposes them.",
+  "functions": [
+    {
+      "name": "get_processes",
+      "command": "Get-SIProcesses",
+      "level": "L",
+      "description": "Running processes of this computer, sorted and filtered: name, PID, parent PID, CPU %, memory (MiB), user, start time, executable path and command line (obvious secrets such as --password=… are masked). Use it to find what slows the computer down or to check a process; the overview get_system only lists the 15 most active.",
+      "parameters": [
+        {
+          "name": "top",
+          "type": "integer",
+          "description": "Number of processes returned.",
+          "minimum": 1,
+          "maximum": 500,
+          "default": 20
+        },
+        {
+          "name": "sortBy",
+          "type": "string",
+          "description": "Sort order: cpu (most active first), memory (largest first) or name.",
+          "enum": [
+            "cpu",
+            "memory",
+            "name"
+          ],
+          "default": "cpu"
+        },
+        {
+          "name": "filter",
+          "type": "string",
+          "description": "Keep only processes whose name contains this text (case-insensitive)."
+        }
+      ]
+    }
+  ]
 }

@@ -202,6 +202,7 @@ function Get-ProcessSnapshot {
 
     [PSCustomObject]@{
         Count = $processes.Count
+        All   = @($rows)
         Top   = $rows | Sort-Object -Property @{ Expression = { [double]$_.Cpu }; Descending = $true },
                                               @{ Expression = 'Memory'; Descending = $true } |
                 Select-Object -First 15
@@ -263,6 +264,7 @@ function Get-Temperatures {
 
 function Get-ModuleData {
     $sections = [System.Collections.Generic.List[object]]::new()
+    $findings = [System.Collections.Generic.List[object]]::new()
     $errors = [ordered]@{}
 
     # Chaque bloc est indépendant : un échec est signalé dans la section « Erreurs », le reste s'affiche.
@@ -310,6 +312,27 @@ function Get-ModuleData {
                 Warning = [Math]::Round($totalGiB * $script:MemWarning, 1)
                 Critical = [Math]::Round($totalGiB * $script:MemCritical, 1)
                 Detail = ('{0} disponibles sur {1}' -f (Format-GiB $memory.Available), (Format-GiB $memory.Total))
+            })
+    }
+
+    if ($memory) {
+        $ratio = ($memory.Total - $memory.Available) / $memory.Total
+        if ($ratio -ge $script:MemWarning) {
+            $findings.Add([PSCustomObject]@{
+                    Severity = $(if ($ratio -ge $script:MemCritical) { 'critical' } else { 'warning' })
+                    Code = 'SYS-MEM-HIGH'
+                    Message = ('Mémoire utilisée à {0} % ({1} disponibles)' -f [Math]::Round(100 * $ratio), (Format-GiB $memory.Available))
+                    Recommendation = 'Fermer les applications les plus gourmandes (voir les processus les plus actifs).'
+                })
+        }
+    }
+
+    if ($temps -and $temps.Cpu -and $temps.Cpu.Celsius -ge $script:TempWarning) {
+        $findings.Add([PSCustomObject]@{
+                Severity = $(if ($temps.Cpu.Celsius -ge $script:TempCritical) { 'critical' } else { 'warning' })
+                Code = 'SYS-CPU-HOT'
+                Message = ('Processeur à {0}' -f (Format-Unit $temps.Cpu.Celsius '°C' '0'))
+                Recommendation = 'Vérifier la ventilation et la charge du processeur.'
             })
     }
 
@@ -401,7 +424,82 @@ function Get-ModuleData {
     $subtitle += [Environment]::MachineName
     if ($memory) { $subtitle += 'en marche depuis {0}' -f (Format-Duration ((Get-Date) - $memory.BootTime)) }
 
-    [PSCustomObject]@{ Subtitle = $subtitle -join ' · '; Sections = $sections.ToArray() }
+    [PSCustomObject]@{ Subtitle = $subtitle -join ' · '; Sections = $sections.ToArray(); Findings = $findings.ToArray() }
 }
 
-Export-ModuleMember -Function Get-ModuleData
+#region Fonctions ciblées (module.json › functions)
+
+# Ligne de commande sans secrets évidents (--password=…, token …) : le MCP ne doit jamais exposer de mot de passe.
+function Hide-Secrets([string]$CommandLine) {
+    if (-not $CommandLine) { return $null }
+    $masked = $CommandLine -replace '(?i)((?:--?|/)?(?:pass(?:word|wd)?|pwd|token|secret|api[-_]?key|auth)[=:\s]+)("[^"]*"|\S+)', '$1***'
+    if ($masked.Length -gt 300) { $masked.Substring(0, 300) + '…' } else { $masked }
+}
+
+# system_get_processes : liste des processus, triée et filtrée, avec utilisateur, chemin et ligne de commande.
+# Windows : Get-Process (-IncludeUserName exige les droits administrateur, sinon colonne vide), CommandLine via CIM.
+# Linux   : Get-Process (/proc/<pid>/status, cmdline, exe).
+function Get-SIProcesses {
+    param(
+        [ValidateRange(1, 500)][int]$Top = 20,
+        [ValidateSet('cpu', 'memory', 'name')][string]$SortBy = 'cpu',
+        [string]$Filter
+    )
+
+    # Pourcentages CPU : il faut un relevé précédent (appel isolé depuis le MCP).
+    if (-not $script:PrevProc) {
+        [void](Get-ProcessSnapshot)
+        Start-Sleep -Milliseconds 250
+    }
+    $snapshot = Get-Cached 'processes' 6 { Get-ProcessSnapshot }
+
+    $rows = $snapshot.All
+    if ($Filter) { $rows = $rows | Where-Object Name -Like "*$Filter*" }
+    $sorted = switch ($SortBy) {
+        'memory' { $rows | Sort-Object Memory -Descending }
+        'name'   { $rows | Sort-Object Name, Id }
+        default  { $rows | Sort-Object @{ Expression = { [double]$_.Cpu }; Descending = $true }, @{ Expression = 'Memory'; Descending = $true } }
+    }
+    $selected = @($sorted | Select-Object -First $Top)
+
+    # Détails lus seulement pour les processus retenus (coûteux : ~0,7 ms par processus sous Linux).
+    $details = @{}
+    $ids = @($selected.Id)
+    if ($ids.Count -gt 0) {
+        $procs = try { Get-Process -Id $ids -IncludeUserName -ErrorAction SilentlyContinue } catch { Get-Process -Id $ids -ErrorAction SilentlyContinue }
+        foreach ($p in $procs) { $details[$p.Id] = $p }
+    }
+
+    $tableRows = foreach ($r in $selected) {
+        $p = $details[$r.Id]
+        $user = $path = $cmd = $parent = $started = $null
+        if ($p) {
+            try { $user = $p.UserName } catch { }
+            try { $path = $p.Path } catch { }
+            try { $cmd = Hide-Secrets $p.CommandLine } catch { }
+            try { $parent = $p.Parent.Id } catch { }
+            try { $started = $p.StartTime.ToString('dd/MM/yyyy HH:mm', $script:Fr) } catch { }
+        }
+        , @($r.Name, $r.Id, $parent, $r.Cpu, [Math]::Round($r.Memory / 1MB, 1), $user, $started, $path, $cmd)
+    }
+
+    $order = @{ cpu = 'CPU'; memory = 'mémoire'; name = 'nom' }[$SortBy]
+    $subtitle = '{0} processus · {1} affichés · tri par {2}' -f @($rows).Count, $selected.Count, $order
+    if ($Filter) { $subtitle += " · filtre « $Filter »" }
+
+    [PSCustomObject]@{
+        Subtitle = $subtitle
+        Sections = @(
+            [PSCustomObject]@{
+                Title = 'Processus'; Type = 'Table'; Icon = 'apps_list'
+                Columns = @('Nom', 'PID', 'PID parent', 'CPU %', 'Mémoire (MiB)', 'Utilisateur', 'Démarré le', 'Chemin', 'Ligne de commande')
+                Rows = @($tableRows)
+            }
+        )
+        Findings = @()
+    }
+}
+
+#endregion
+
+Export-ModuleMember -Function Get-ModuleData, Get-SIProcesses

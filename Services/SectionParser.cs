@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -26,6 +27,38 @@ public static class SectionParser
     /// <summary>Optional Subtitle of the result, shown in the page header ("wlp4s0 · 192.168.1.42").</summary>
     public static string? ParseSubtitle(PSObject data) =>
         data.Properties["Subtitle"]?.Value?.ToString() is { Length: > 0 } subtitle ? subtitle : null;
+
+    /// <summary>
+    /// Optional Findings beside Sections: @{ Severity = 'warning'; Code = 'STO-VOLUME-FULL'; Message; Recommendation }.
+    /// A finding without Code or Message, or with an unknown Severity, is ignored and reported on stderr.
+    /// </summary>
+    public static IReadOnlyList<Finding> ParseFindings(PSObject data)
+    {
+        var findings = new List<Finding>();
+        foreach (var item in List(data.Properties["Findings"]?.Value))
+        {
+            if (item is null)
+                continue;
+            var ps = PSObject.AsPSObject(item);
+            string? Get(string name) =>
+                (ps.BaseObject is IDictionary d ? Unwrap(d[name]) : Unwrap(ps.Properties[name]?.Value))?.ToString();
+
+            var code = Get("Code");
+            var message = Get("Message");
+            if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(message)
+                || !Enum.TryParse<FindingSeverity>(Get("Severity"), ignoreCase: true, out var severity)
+                || !Enum.IsDefined(severity))
+            {
+                Console.Error.WriteLine($"[modules] finding ignoré (Severity, Code et Message requis) : {code ?? message}");
+                continue;
+            }
+
+            findings.Add(new Finding(severity, code, message, Get("Recommendation")));
+        }
+
+        // Worst first: the AI and the page read the most serious ones first.
+        return findings.OrderByDescending(f => f.Severity).ToList();
+    }
 
     private static Section ParseSection(PSObject section)
     {

@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:SysInfo.ViewModels"
              xmlns:conv="using:SysInfo.Converters"
+             xmlns:m="using:SysInfo.Models"
              x:Class="SysInfo.Views.ModuleTabView"
              x:DataType="vm:ModuleTabViewModel">
 
@@ -57,6 +58,48 @@
                                                  Text="{Binding ErrorMessage}" TextWrapping="Wrap" />
                         </StackPanel>
                     </DockPanel>
+                </Border>
+
+                <!-- Constats du module (Findings), les plus graves d'abord : icône d'état, message, recommandation -->
+                <Border Classes="Card" IsVisible="{Binding HasFindings}">
+                    <StackPanel Spacing="{StaticResource Space12}">
+                        <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space8}">
+                            <PathIcon Classes="CardIcon" Data="{StaticResource Icon.info}" />
+                            <TextBlock Classes="CardTitle" Text="Constats" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <ItemsControl ItemsSource="{Binding Findings}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Spacing="{StaticResource Space12}" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="m:Finding">
+                                    <DockPanel>
+                                        <Panel DockPanel.Dock="Left" VerticalAlignment="Top" Margin="0,2,12,0">
+                                            <PathIcon Width="16" Height="16" Data="{StaticResource Icon.error_circle}"
+                                                      Foreground="{DynamicResource Danger}" IsVisible="{Binding IsCritical}"
+                                                      ToolTip.Tip="Critique" />
+                                            <PathIcon Width="16" Height="16" Data="{StaticResource Icon.warning}"
+                                                      Foreground="{DynamicResource Warning}" IsVisible="{Binding IsWarning}"
+                                                      ToolTip.Tip="Attention" />
+                                            <PathIcon Width="16" Height="16" Data="{StaticResource Icon.info}"
+                                                      Foreground="{DynamicResource TextMuted}" IsVisible="{Binding IsInfo}"
+                                                      ToolTip.Tip="Information" />
+                                        </Panel>
+                                        <TextBlock DockPanel.Dock="Right" Classes="Caption" Text="{Binding Code}"
+                                                   VerticalAlignment="Top" Margin="12,2,0,0" />
+                                        <StackPanel Spacing="{StaticResource Space4}">
+                                            <SelectableTextBlock Classes="Body" Text="{Binding Message}" TextWrapping="Wrap" />
+                                            <TextBlock Classes="Body" Foreground="{DynamicResource TextSecondary}"
+                                                       Text="{Binding Recommendation}" TextWrapping="Wrap"
+                                                       IsVisible="{Binding HasRecommendation}" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
                 </Border>
 
                 <!-- Squelette : une carte de valeurs, une carte de métrique -->

@@ -52,7 +52,7 @@ public static partial class ModuleLoader
                     throw new InvalidDataException($"id « {module.Manifest.Id} » déjà utilisé par un autre module");
 
                 if (platform is not null && module.Manifest.Platforms.Contains(platform, StringComparer.OrdinalIgnoreCase))
-                    modules.Add(module);
+                    modules.Add(module with { Functions = LoadFunctions(module, platform, folder, errors) });
             }
             catch (Exception ex) when (ex is IOException or InvalidDataException or JsonException or UnauthorizedAccessException)
             {
@@ -83,6 +83,60 @@ public static partial class ModuleLoader
 
         return new LoadedModule(manifest, directory, scriptPath);
     }
+
+    // An invalid function is skipped and reported; the module and its other functions still load.
+    private static List<ModuleFunction> LoadFunctions(LoadedModule module, string platform, string folder, List<string> errors)
+    {
+        var functions = new List<ModuleFunction>();
+        var script = File.ReadAllText(module.ScriptPath);
+
+        foreach (var function in module.Manifest.Functions)
+        {
+            var problem = ValidateFunction(function, script, functions);
+            if (problem is not null)
+            {
+                errors.Add($"{folder} › {function.Name} : {problem}");
+                continue;
+            }
+
+            var platforms = function.Platforms.Count > 0 ? function.Platforms : module.Manifest.Platforms;
+            if (platforms.Contains(platform, StringComparer.OrdinalIgnoreCase))
+                functions.Add(function);
+        }
+
+        return functions;
+    }
+
+    private static string? ValidateFunction(ModuleFunction function, string script, List<ModuleFunction> previous)
+    {
+        if (!FunctionNamePattern().IsMatch(function.Name))
+            return "nom invalide (snake_case : minuscules, chiffres, _)";
+        if (previous.Any(f => f.Name == function.Name))
+            return "nom déjà utilisé dans ce module";
+        if (string.IsNullOrWhiteSpace(function.Description))
+            return "description manquante";
+        if (!Regex.IsMatch(script, $@"(?im)^\s*function\s+{Regex.Escape(function.Command)}\b"))
+            return $"fonction {function.Command} absente du .psm1";
+
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var parameter in function.Parameters)
+        {
+            if (!ParameterNamePattern().IsMatch(parameter.Name))
+                return $"paramètre « {parameter.Name} » invalide (camelCase)";
+            if (!names.Add(parameter.Name))
+                return $"paramètre « {parameter.Name} » en double";
+            if (parameter.Enum.Count > 0 && parameter.Type != ParameterType.String)
+                return $"paramètre « {parameter.Name} » : enum réservé au type string";
+        }
+
+        return null;
+    }
+
+    [GeneratedRegex("^[a-z][a-z0-9_]*$")]
+    private static partial Regex FunctionNamePattern();
+
+    [GeneratedRegex("^[a-z][A-Za-z0-9]*$")]
+    private static partial Regex ParameterNamePattern();
 
     private static string? CurrentPlatform() =>
         OperatingSystem.IsWindows() ? "windows"

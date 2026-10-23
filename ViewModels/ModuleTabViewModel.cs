@@ -84,6 +84,13 @@ public partial class ModuleTabViewModel : NavPageViewModel, IDisposable
         Blocks = blocks;
     }
 
+    /// <summary>Normalized findings of the module, worst first, shown above the sections.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasFindings))]
+    public partial IReadOnlyList<Finding> Findings { get; private set; } = [];
+
+    public bool HasFindings => Findings.Count > 0;
+
     /// <summary>Optional subtitle from the module, shown after the page title ("wlp4s0 · 192.168.1.42").</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSubtitle))]
@@ -165,6 +172,7 @@ public partial class ModuleTabViewModel : NavPageViewModel, IDisposable
         {
             _powerShell ??= await Task.Run(() => new PowerShellService(_module.ScriptPath));
             var data = await _powerShell.GetModuleDataAsync();
+            Findings = SectionParser.ParseFindings(data);
             ApplySections(SectionParser.Parse(data));
             Subtitle = SectionParser.ParseSubtitle(data);
             ErrorMessage = null;
@@ -206,7 +214,11 @@ public partial class ModuleTabViewModel : NavPageViewModel, IDisposable
                 .ToList();
         }
 
-        Status = Sections.Select(s => s.Status).DefaultIfEmpty(SectionStatus.None).Max();
+        // The tab carries the worst state of its Metric / Usage thresholds and of its findings.
+        Status = Sections.Select(s => s.Status)
+            .Concat(Findings.Select(f => f.Status))
+            .DefaultIfEmpty(SectionStatus.None)
+            .Max();
     }
 
     public void Dispose()
