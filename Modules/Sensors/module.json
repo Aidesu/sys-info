@@ -1,0 +1,74 @@
+{
+  "id": "sensors",
+  "title": "Capteurs & Énergie",
+  "icon": "temperature",
+  "order": 15,
+  "refreshSeconds": 10,
+  "platforms": [
+    "windows",
+    "linux"
+  ],
+  "requiresAdmin": false,
+  "description": "Sensors and power of this computer: temperatures of the CPU, GPU, SSDs/disks, chipset and other probes with their warning/critical limits (Linux hwmon, NVIDIA nvidia-smi; Windows ACPI thermal zones, or every probe when LibreHardwareMonitor runs), fans and voltages; CPU frequency, frequency cap, turbo and thermal throttling (Linux intel thermal_throttle counters, Windows % Performance Limit); NVIDIA GPU throttle reasons; battery (charge, state, power draw, time left, capacity versus design = wear, cycles) and wireless device batteries; UPS (NUT upsc, apcupsd, or system battery); AC or battery; active power plan and available plans (Windows powercfg and power mode; Linux power-profiles-daemon or tuned); sleep modes, last sleep and wake, wake source, devices allowed to wake the computer, Windows Fast Startup. Findings flag hot components, throttling, a capped CPU, a worn or low battery, a UPS on battery, a power saver plan on AC and Fast Startup.",
+  "functions": [
+    {
+      "name": "get_sensors",
+      "title": "Toutes les sondes",
+      "help": "Toutes les sondes de la machine avec leurs limites : températures (chaque cœur du processeur compris), ventilateurs, tensions, consommation.",
+      "command": "Get-SISensors",
+      "level": "L",
+      "description": "Every sensor of this computer with its value, unit, minimum, warning and critical limits and source: temperatures (each CPU core included), fans (rpm or %), voltages, currents and power. Use it when the overview groups CPU cores or to check one probe.",
+      "parameters": [
+        { "name": "type", "label": "Type", "type": "string", "description": "all, temperature, fan, voltage (and current) or power.", "enum": ["all", "temperature", "fan", "voltage", "power"], "default": "all" }
+      ]
+    },
+    {
+      "name": "get_battery",
+      "title": "Batterie en détail",
+      "help": "Détail de la batterie (et de l'onduleur) : capacité d'origine et actuelle (usure), cycles, charge, autonomie, avec l'historique de charge des derniers jours.",
+      "command": "Get-SIBattery",
+      "level": "L",
+      "description": "Battery and UPS details: manufacturer, model, technology, state, charge, energy left, current and design capacity, health, cycles, power draw, time left; charge history over the last days (Linux: upower history; Windows: powercfg /batteryreport, which also gives the capacity history). Use it to judge battery wear or autonomy problems.",
+      "parameters": [
+        { "name": "days", "label": "Jours", "type": "integer", "description": "Days of charge history.", "minimum": 1, "maximum": 30, "default": 2 }
+      ]
+    },
+    {
+      "name": "get_wake_history",
+      "title": "Veilles et réveils",
+      "help": "Mises en veille et réveils des derniers jours avec la cause du réveil, minuteries et périphériques autorisés à réveiller l'ordinateur.",
+      "command": "Get-SIWakeHistory",
+      "level": "L",
+      "description": "Sleep and wake history over the last days (sleep time, wake time, duration, type, wake source), timers allowed to wake the computer and devices armed for wake. Windows: System log (Kernel-Power 42, Power-Troubleshooter 1), powercfg /waketimers (administrator for full detail), /lastwake, /devicequery wake_armed; Linux: kernel journal, systemd timers with WakeSystem, /proc/acpi/wakeup. Use it when the computer wakes up on its own or does not stay asleep.",
+      "parameters": [
+        { "name": "days", "label": "Jours", "type": "integer", "description": "Number of days.", "minimum": 1, "maximum": 60, "default": 7 }
+      ]
+    },
+    {
+      "name": "get_energy_report",
+      "title": "Rapport d'efficacité énergétique",
+      "help": "Windows : observe l'ordinateur pendant la durée choisie puis liste les problèmes d'économie d'énergie (périphérique qui empêche la veille, réglages…). Laisser la machine au repos pendant le test. Droits administrateur.",
+      "command": "Get-SIEnergyReport",
+      "level": "L",
+      "platforms": ["windows"],
+      "requiresAdmin": true,
+      "long": true,
+      "timeoutSeconds": 600,
+      "description": "Windows energy efficiency diagnosis (powercfg /energy): observes the computer for a while, then lists errors and warnings (devices preventing sleep, USB devices not suspending, power plan settings, battery problems). Needs administrator rights; the computer should be idle during the observation.",
+      "parameters": [
+        { "name": "duration", "label": "Durée (s)", "type": "integer", "description": "Observation time in seconds.", "minimum": 10, "maximum": 300, "default": 60 }
+      ]
+    },
+    {
+      "name": "set_power_plan",
+      "title": "Changer de plan d'alimentation",
+      "help": "Change de plan d'alimentation (économie d'énergie, équilibré, performances…). Le nom exact des plans disponibles est affiché dans la page. Annulable depuis l'Audit.",
+      "command": "Set-SIPowerPlan",
+      "level": "A",
+      "description": "Switches the active power plan. Windows: powercfg /setactive (plan name or GUID, as listed in the overview get_sensors); Linux: power-profiles-daemon (powerprofilesctl set power-saver|balanced|performance) or tuned (tuned-adm profile <name>). The preview lists the available plans; blocked for an unknown plan or when no tool is available. Undoable (previous plan).",
+      "parameters": [
+        { "name": "plan", "label": "Plan", "type": "string", "description": "Plan or profile name (or Windows plan GUID), as shown in the overview's « Plans disponibles ».", "required": true }
+      ]
+    }
+  ]
+}

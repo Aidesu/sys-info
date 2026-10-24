@@ -119,6 +119,8 @@ public sealed class LineChart : Control
     private const double LabelSize = 11;    // ValueSmall
     private const double StrokeThickness = 1.5;
 
+    private static readonly CultureInfo French = CultureInfo.GetCultureInfo("fr-FR");
+
     private Point? _pointer;
 
     protected override void OnPointerMoved(PointerEventArgs e)
@@ -249,7 +251,9 @@ public sealed class LineChart : Control
         if (double.IsFinite(v2))
             context.DrawEllipse(Stroke2, dotPen, new Point(XOf(index), YOf(v2)), 4, 4);
 
-        var timeText = times is { } t && t.Count >= count ? t[t.Count - count + index].ToString("HH:mm:ss", CultureInfo.InvariantCulture) : string.Empty;
+        // Long windows (history kept by the module): day and minute; else the second.
+        var timeFormat = Window.TotalHours >= 20 ? "ddd d HH:mm" : Window.TotalMinutes >= 30 ? "HH:mm" : "HH:mm:ss";
+        var timeText = times is { } t && t.Count >= count ? t[t.Count - count + index].ToString(timeFormat, French) : string.Empty;
         var rows = new List<(string Label, string Value, IBrush? Swatch)>
         {
             (values2 is not null ? Label1 ?? string.Empty : string.Empty, FormatValue(v1), Stroke),
@@ -390,5 +394,8 @@ public sealed class LineChart : Control
     }
 
     private static string FormatAgo(TimeSpan span) =>
-        span.TotalSeconds < 90 ? $"−{Math.Round(span.TotalSeconds)}\u00a0s" : $"−{Math.Round(span.TotalMinutes)}\u00a0min";
+        span.TotalSeconds < 90 ? $"−{Math.Round(span.TotalSeconds)}\u00a0s"
+        : span.TotalMinutes < 120 ? $"−{Math.Round(span.TotalMinutes)}\u00a0min"
+        : span.TotalHours < 48 ? $"−{Math.Round(span.TotalHours)}\u00a0h"
+        : $"−{Math.Round(span.TotalDays)}\u00a0j";
 }

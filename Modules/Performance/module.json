@@ -1,0 +1,80 @@
+{
+  "id": "performance",
+  "title": "Performance",
+  "icon": "pulse",
+  "order": 5,
+  "refreshSeconds": 2,
+  "platforms": [
+    "windows",
+    "linux"
+  ],
+  "requiresAdmin": false,
+  "description": "Live load and recorded history of this computer: CPU, memory (swap, committed), disk activity (busy %, latency, queue, read/write throughput) and network throughput; bottleneck diagnosis from the last seconds (CPU saturated, memory pressure, disk saturated, link saturated; Linux pressure stall information, Windows queues); 24-hour history charts (15-minute averages) kept on disk while SysInfo runs; the processes that used the most CPU and memory over the last hour; configurable alert thresholds (CPU, memory, swap, committed memory, disk activity and latency, network, free space) with active alerts and alerts of the last 7 days. Findings flag active alerts (PERF-ALERT-*) and current bottlenecks (PERF-BOTTLENECK-*).",
+  "functions": [
+    {
+      "name": "get_history",
+      "title": "Historique",
+      "help": "Courbes de charge enregistrées pendant que SysInfo tourne (processeur, mémoire, disque, réseau) sur 1 h, 6 h, 24 h ou 7 jours, avec moyenne, maximum et heure du maximum. Les trous correspondent aux moments où SysInfo était fermé.",
+      "command": "Get-SIPerformanceHistory",
+      "level": "L",
+      "description": "Recorded load history over a period (one point every 30 s while SysInfo runs, kept 7 days): CPU (average and peaks), memory and swap, disk activity and throughput, network throughput, grouped by minute (1h), 5 min (6h), quarter hour (24h) or 2 h (7d), plus average, 95th percentile, maximum and time of the maximum of each measure. Use it to see when the computer was slow and which resource was busy; gaps mean SysInfo was not running.",
+      "parameters": [
+        { "name": "period", "label": "Période", "type": "string", "description": "Period ending now.", "enum": ["24h", "1h", "6h", "7d"], "default": "24h" },
+        { "name": "metric", "label": "Mesure", "type": "string", "description": "all, or one resource: cpu, memory, disk or network.", "enum": ["all", "cpu", "memory", "disk", "network"], "default": "all" }
+      ]
+    },
+    {
+      "name": "get_top_consumers",
+      "title": "Processus les plus gourmands",
+      "help": "Programmes qui ont le plus utilisé le processeur ou la mémoire sur la période, d'après l'historique : utile pour trouver ce qui ralentit la machine au fil de la journée, pas seulement en ce moment.",
+      "command": "Get-SIPerformanceTopConsumers",
+      "level": "L",
+      "description": "Processes (grouped by name) that used the most CPU or memory over a period, from the recorded history: average CPU % of the whole machine over the period, CPU peak, average and peak memory (MiB), time spent among the heaviest. Use it to find what slows the computer down over time (get_processes in the system module only shows the current moment).",
+      "parameters": [
+        { "name": "period", "label": "Période", "type": "string", "description": "Period ending now.", "enum": ["24h", "1h", "6h", "7d"], "default": "24h" },
+        { "name": "top", "label": "Processus affichés (les plus gourmands)", "type": "integer", "description": "Number of processes returned.", "minimum": 1, "maximum": 100, "default": 15 },
+        { "name": "sortBy", "label": "Tri", "type": "string", "description": "cpu (average CPU) or memory (average memory).", "enum": ["cpu", "memory"], "default": "cpu" }
+      ]
+    },
+    {
+      "name": "get_alerts",
+      "title": "Alertes",
+      "help": "Seuils d'alerte en place et alertes déclenchées sur les derniers jours (début, durée, pic). Une alerte se déclenche quand une mesure reste au-delà de son seuil pendant la durée réglée.",
+      "command": "Get-SIPerformanceAlerts",
+      "level": "L",
+      "description": "Alert thresholds (measure, threshold, duration, severity, enabled, current average, state) and the alerts raised over the last days (start, duration, measure, peak, threshold, severity). An alert is raised when the average of a measure stays beyond its threshold for its duration (default: CPU, memory, committed memory and disk activity ≥ 90 % for 5 min; free space ≤ 10 %).",
+      "parameters": [
+        { "name": "days", "label": "Jours", "type": "integer", "description": "Number of days of alerts returned.", "minimum": 1, "maximum": 90, "default": 7 }
+      ]
+    },
+    {
+      "name": "set_alert",
+      "title": "Régler un seuil d'alerte",
+      "help": "Règle un seuil d'alerte : choisir la mesure, le seuil (en % ou en ms selon la mesure), la durée pendant laquelle il doit être dépassé, la gravité, et l'activer ou non. Ne touche qu'aux réglages de SysInfo ; annulable depuis l'Audit.",
+      "command": "Set-SIPerformanceAlert",
+      "level": "A",
+      "description": "Changes one alert threshold of the performance module (stored in the user's SysInfo settings, not in the system): threshold value, duration in minutes, severity, enabled. Parameters left out keep their current value. Measures: cpu, memory, swap, commit (%), disk (activity %), diskLatency (ms), network (% of the link speed), diskFree (% free on the fullest volume, alert below the threshold). The preview shows the rule before and after; undoable.",
+      "parameters": [
+        { "name": "metric", "label": "Mesure", "type": "string", "description": "Measure whose threshold is changed.", "enum": ["cpu", "memory", "swap", "commit", "disk", "diskLatency", "network", "diskFree"], "required": true },
+        { "name": "threshold", "label": "Seuil", "type": "number", "description": "Threshold, in the unit of the measure (% or ms).", "minimum": 0.1, "maximum": 10000 },
+        { "name": "minutes", "label": "Durée (min)", "type": "integer", "description": "How long the average must stay beyond the threshold, in minutes (ignored for diskFree).", "minimum": 1, "maximum": 1440 },
+        { "name": "severity", "label": "Gravité", "type": "string", "description": "Severity of the alert finding.", "enum": ["warning", "critical"], "default": "warning" },
+        { "name": "enabled", "label": "Activé", "type": "boolean", "description": "true to watch this measure, false to turn the alert off.", "default": true }
+      ]
+    },
+    {
+      "name": "benchmark_disk",
+      "title": "Mini-benchmark disque",
+      "help": "Mesure la vitesse du disque qui contient le dossier choisi : écriture et lecture d'un fichier de test, puis accès aléatoires. Le fichier est supprimé à la fin. Le disque est très occupé pendant le test ; plus la taille est grande, plus la mesure est fiable et longue.",
+      "command": "Measure-SIDiskPerformance",
+      "level": "A",
+      "long": true,
+      "timeoutSeconds": 900,
+      "description": "Measures the speed of the disk holding a folder: sequential write then read of a temporary test file (bypassing the OS cache), then 2,000 random 4 KiB reads (average and 95th percentile latency, IOPS), and compares the result with typical NVMe SSD, SATA SSD and hard disk figures. The test file is deleted afterwards. The disk is busy during the test (from a few seconds to a few minutes). Blocked when the folder is missing or not writable, or when free space is short.",
+      "parameters": [
+        { "name": "path", "label": "Dossier", "type": "string", "description": "Folder on the disk to test (default: the user's home folder)." },
+        { "name": "sizeMiB", "label": "Taille (Mio)", "type": "integer", "description": "Size of the test file in MiB; larger = more reliable, longer.", "minimum": 64, "maximum": 8192, "default": 1024 }
+      ]
+    }
+  ]
+}

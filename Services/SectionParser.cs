@@ -139,7 +139,8 @@ public static class SectionParser
                 Number(section, "Critical"),
                 section.Properties["Detail"]?.Value?.ToString(),
                 section.Properties["Label"]?.Value?.ToString(),
-                ParseSeries(section.Properties["Secondary"]?.Value)),
+                ParseSeries(section.Properties["Secondary"]?.Value),
+                ParseHistory(section.Properties["History"]?.Value)),
             "Table" => ParseTable(title, section),
             "Usage" => new UsageSection(title, List(section.Properties["Items"]?.Value).Select(ParseUsageItem).ToList()),
             _ => new UnsupportedSection(title, type),
@@ -163,6 +164,39 @@ public static class SectionParser
             ps.Properties["Label"]?.Value?.ToString() ?? string.Empty,
             Formatting.ToDouble(Unwrap(ps.Properties["Value"]?.Value)));
     }
+
+    // History = @{ Window = 86400; Points = @( @(1761300000, 12.5, 3.1), … ) }: time (Unix seconds, or a date / ISO
+    // text), value, optional second value; $null = gap. Points outside the window are kept (the chart clips them).
+    private static MetricHistory? ParseHistory(object? value)
+    {
+        if (value is null)
+            return null;
+        var ps = PSObject.AsPSObject(value);
+        object? Get(string name) => ps.BaseObject is IDictionary d ? Unwrap(d[name]) : Unwrap(ps.Properties[name]?.Value);
+        if (Formatting.ToDouble(Get("Window")) is not { } window || window <= 0)
+            return null;
+        var points = new List<HistoryPoint>();
+        foreach (var item in List(Get("Points")))
+        {
+            var fields = List(item);
+            if (fields.Count < 2 || ParseTime(fields[0]) is not { } at)
+                continue;
+            points.Add(new HistoryPoint(at,
+                Formatting.ToDouble(fields[1]) ?? double.NaN,
+                fields.Count > 2 ? Formatting.ToDouble(fields[2]) ?? double.NaN : double.NaN));
+        }
+        points.Sort((a, b) => a.At.CompareTo(b.At));
+        return new MetricHistory(TimeSpan.FromSeconds(window), points);
+    }
+
+    private static DateTime? ParseTime(object? value) => value switch
+    {
+        DateTime d => d.ToLocalTime(),
+        DateTimeOffset o => o.LocalDateTime,
+        string s when DateTimeOffset.TryParse(s, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out var o) => o.LocalDateTime,
+        var v when Formatting.ToDouble(v) is { } seconds => DateTimeOffset.FromUnixTimeMilliseconds((long)(seconds * 1000)).LocalDateTime,
+        _ => null,
+    };
 
     // Usage item: hashtable or PSCustomObject with Label, Detail, Value, Max, Unit, Warning, Critical, Text.
     private static UsageItem ParseUsageItem(object? item)

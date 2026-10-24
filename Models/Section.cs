@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace SysInfo.Models;
@@ -23,10 +24,12 @@ public sealed record KeyValueItem(string Key, string Value);
 /// Detail is an optional short line shown under the value ("4,70 GHz · 16 threads").
 /// With a Secondary value, the metric becomes a two-series chart (ex. download / upload):
 /// Label names the main series, Secondary.Label the second one; thresholds apply to the main series.
+/// With a History, the chart shows the points given by the module (ex. 24 h kept on disk) instead of the values
+/// gathered on screen, as a wide chart.
 /// </summary>
 public sealed record MetricSection(
     string Title, double? Value, string Unit, double? Max, double? Warning, double? Critical, string? Detail = null,
-    string? Label = null, MetricSeries? Secondary = null) : Section(Title)
+    string? Label = null, MetricSeries? Secondary = null, MetricHistory? History = null) : Section(Title)
 {
     public bool IsDual => Secondary is not null;
 
@@ -39,6 +42,14 @@ public sealed record MetricSection(
 
 /// <summary>Second series of a two-series Metric.</summary>
 public sealed record MetricSeries(string Label, double? Value);
+
+/// <summary>
+/// Points supplied by the module for a Metric chart, oldest first, over Window (the time the chart covers, ending now).
+/// NaN = gap. Secondary is NaN for a single-series metric.
+/// </summary>
+public sealed record MetricHistory(TimeSpan Window, IReadOnlyList<HistoryPoint> Points);
+
+public readonly record struct HistoryPoint(DateTime At, double Value, double Secondary);
 
 /// <summary>
 /// A list shown as a sortable table. Each row holds one value per column (number, text or null).

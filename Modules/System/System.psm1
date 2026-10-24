@@ -297,13 +297,14 @@ function Get-MemoryInfo {
 }
 
 # Processus : nombre total et les 15 plus gourmands (CPU % depuis l'appel précédent, puis mémoire).
-# Dans SysInfo, la classe [SysInfo.Native.ProcessSampler] de l'application fait le relevé (~3 ms au lieu de ~60 ms) ;
+# Dans SysInfo, la classe [SysInfo.Native.ProcessSampler] de l'application fait le relevé (~5 ms au lieu de ~60 ms),
+# partagé avec le module Performance (Shared : un relevé de moins de 1,5 s est réutilisé) ;
 # seul dans pwsh, le module retombe sur Get-Process.
-$script:Sampler = if ('SysInfo.Native.ProcessSampler' -as [type]) { [SysInfo.Native.ProcessSampler]::new() } else { $null }
+$script:Sampler = [bool]('SysInfo.Native.ProcessSampler' -as [type])
 
 function Get-ProcessSnapshot {
     if ($script:Sampler) {
-        $all = $script:Sampler.Sample()
+        $all = [SysInfo.Native.ProcessSampler]::Shared(1500)
         $script:PrevProc = $true   # un relevé de départ existe (voir Get-ProcessSnapshotReady)
         return [PSCustomObject]@{ Count = $all.Count; All = $all; Top = $all[0..([Math]::Min(15, $all.Count) - 1)] }
     }

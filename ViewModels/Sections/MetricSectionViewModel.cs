@@ -11,6 +11,7 @@ namespace SysInfo.ViewModels.Sections;
 /// Value + unit, a gauge when Max is known, an optional detail line, and a timed history
 /// (last 60 samples) with its statistics for the chart. A two-series metric (Secondary) keeps a
 /// second history aligned on the same times; a missing value is kept as NaN (a gap in the line).
+/// A metric with a History (points kept by the module, ex. 24 h) shows those points instead, over their own window.
 /// </summary>
 public partial class MetricSectionViewModel : SectionViewModel
 {
@@ -42,10 +43,17 @@ public partial class MetricSectionViewModel : SectionViewModel
 
     /// <summary>
     /// Time covered by the chart: the module's refresh interval × (HistoryLength − 1). Set by the page; zero = place
-    /// samples by rank.
+    /// samples by rank. A History brings its own window.
     /// </summary>
     [ObservableProperty]
     public partial TimeSpan ChartWindow { get; set; }
+
+    /// <summary>The module supplies the points (<see cref="MetricSection.History"/>): wide chart, window not set by the page.</summary>
+    public bool HasHistory => Data.History is not null;
+
+    /// <summary>Samples the chart is laid out for.</summary>
+    [ObservableProperty]
+    public partial int ChartCapacity { get; private set; } = HistoryLength;
 
     /// <summary>Time of each value in <see cref="History"/>.</summary>
     [ObservableProperty]
@@ -113,6 +121,8 @@ public partial class MetricSectionViewModel : SectionViewModel
     {
         get
         {
+            if (Data.History is { } history)
+                return Formatting.Window(history.Window);
             if (HistoryTimes.Count < 2)
                 return "En attente de mesures";
             var span = HistoryTimes[^1] - HistoryTimes[0];
@@ -131,6 +141,21 @@ public partial class MetricSectionViewModel : SectionViewModel
     public override void Update(Section section)
     {
         var metric = (MetricSection)section;
+
+        if (metric.History is { } history)
+        {
+            // Points kept by the module: replaced as a whole (the module only sends new ones when they change).
+            if (Data?.History?.Points is not { } previous || !previous.SequenceEqual(history.Points))
+            {
+                HistoryTimes = history.Points.Select(p => p.At).ToArray();
+                SecondaryHistory = metric.IsDual ? history.Points.Select(p => p.Secondary).ToArray() : null;
+                ChartCapacity = Math.Max(2, history.Points.Count);
+                History = history.Points.Select(p => p.Value).ToArray();
+            }
+            ChartWindow = history.Window;
+            Data = metric;
+            return;
+        }
 
         // Single series: only real values. Two series: one sample per refresh, NaN where a value is missing.
         if (metric.IsDual || metric.Value is not null)

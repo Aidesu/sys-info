@@ -131,7 +131,56 @@ public sealed class CpuSampler
             return null;
         return info.Average(p => (double)p.CurrentMhz) / 1000;
     }
+
+    /// <summary>
+    /// Current, maximum and allowed frequency (GHz, averages over the logical processors), for the Sensors module:
+    /// a limit below the maximum means the CPU is capped (power plan, heat, power supply). Null when not exposed.
+    /// Linux: cpufreq scaling_cur_freq, cpuinfo_max_freq and scaling_max_freq. Windows: ProcessorInformation (MhzLimit).
+    /// </summary>
+    public static CpuLimits? Limits()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var count = Environment.ProcessorCount;
+            var info = new ProcessorPowerInformation[count];
+            var size = (uint)(Marshal.SizeOf<ProcessorPowerInformation>() * count);
+            if (CallNtPowerInformation(11, IntPtr.Zero, 0, info, size) != 0)
+                return null;
+            return new CpuLimits(info.Average(p => (double)p.CurrentMhz) / 1000, info.Average(p => (double)p.MaxMhz) / 1000,
+                info.Average(p => (double)p.MhzLimit) / 1000);
+        }
+        var current = new List<double>();
+        var max = new List<double>();
+        var limit = new List<double>();
+        foreach (var dir in Directory.EnumerateDirectories("/sys/devices/system/cpu", "cpu*"))
+        {
+            var freq = Path.Combine(dir, "cpufreq");
+            if (!Directory.Exists(freq))
+                continue;
+            if (ReadKhz(Path.Combine(freq, "scaling_cur_freq")) is { } c) current.Add(c);
+            if (ReadKhz(Path.Combine(freq, "cpuinfo_max_freq")) is { } m) max.Add(m);
+            if (ReadKhz(Path.Combine(freq, "scaling_max_freq")) is { } l) limit.Add(l);
+        }
+        if (max.Count == 0)
+            return null;
+        return new CpuLimits(current.Count > 0 ? current.Average() / 1e6 : null, max.Average() / 1e6, limit.Count > 0 ? limit.Average() / 1e6 : null);
+    }
+
+    private static double? ReadKhz(string path)
+    {
+        try
+        {
+            return double.TryParse(File.ReadAllText(path).Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var khz) ? khz : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
 }
+
+/// <summary>Frequencies in GHz: current, maximum of the CPU, and maximum allowed now.</summary>
+public sealed record CpuLimits(double? CurrentGHz, double MaxGHz, double? LimitGHz);
 
 /// <summary>Total usage (%) and per logical processor; Total is null on the first sample.</summary>
 public sealed record CpuSample(double? Total, double[] Cores);
