@@ -29,7 +29,8 @@ public static class ConfirmLauncher
             var moduleId = request["module"]?.GetValue<string>();
             var functionName = request["function"]?.GetValue<string>();
 
-            var module = ModuleLoader.Load(ModuleLoader.DefaultModulesDirectory).Modules.FirstOrDefault(m => m.Manifest.Id == moduleId)
+            var modules = ModuleLoader.Load(ModuleLoader.DefaultModulesDirectory).Modules;
+            var module = modules.FirstOrDefault(m => m.Manifest.Id == moduleId)
                 ?? throw new InvalidDataException($"module « {moduleId} » introuvable");
             var function = module.Functions.FirstOrDefault(f => f.Name == functionName && f.IsAction)
                 ?? throw new InvalidDataException($"action « {functionName} » introuvable dans {moduleId}");
@@ -38,6 +39,10 @@ public static class ConfirmLauncher
             var timeout = request["timeoutSeconds"]?.GetValue<int>() ?? 120;
 
             runner = new ModuleRunner(module);
+            // An aggregating module (Rapports…) reads the others: their runners are created too (runspaces on first use).
+            Host.ModuleHost.Register(runner);
+            foreach (var other in modules.Where(m => m.Manifest.Id != moduleId))
+                Host.ModuleHost.Register(new ModuleRunner(other));
             var origin = $"Demandée par {(string.IsNullOrWhiteSpace(client) ? "un agent IA" : client)} (MCP), " +
                          $"exécutée sous le compte {Environment.UserName}" +
                          (Environment.IsPrivilegedProcess ? " avec les droits administrateur." : ".");

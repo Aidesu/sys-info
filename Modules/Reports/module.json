@@ -1,0 +1,92 @@
+{
+  "id": "reports",
+  "title": "Rapports",
+  "icon": "checkmark_circle",
+  "order": 96,
+  "refreshSeconds": 600,
+  "platforms": ["windows", "linux"],
+  "requiresAdmin": false,
+  "description": "Health report of this computer built from all the other modules (same data as their pages): health score 0-100 overall and per domain (security, storage and backup, performance, stability, network, software and updates: 100 minus 20 per critical, 8 per warning and up to 10 for info findings) with its 30-day history, the most serious findings of all modules, snapshots and export folders. Findings flag a low score (RPT-SCORE-LOW) and modules that did not answer.",
+  "functions": [
+    {
+      "name": "run_diagnostic",
+      "title": "Diagnostic global",
+      "help": "Relève tous les modules et liste tous leurs constats, les plus graves d'abord, avec le score par domaine. C'est le bilan de santé complet de la machine en une fois.",
+      "command": "Invoke-SIDiagnostic",
+      "level": "L",
+      "long": true,
+      "timeoutSeconds": 600,
+      "description": "Collects every module now and returns all their findings, most serious first (each with its module, code, message and recommendation), the score per domain and the modules collected. Use it for a full check-up of the computer in one call.",
+      "parameters": [
+        { "name": "minSeverity", "label": "Gravité minimale", "type": "string", "description": "all, warning (warning and critical) or critical.", "enum": ["all", "warning", "critical"], "default": "all" }
+      ]
+    },
+    {
+      "name": "create_snapshot",
+      "title": "Créer un instantané",
+      "help": "Enregistre l'état actuel de la machine (toutes les pages) pour le comparer plus tard. À faire avant une intervention, avec un libellé comme « avant-intervention ». Ne modifie rien sur le système.",
+      "command": "New-SISnapshot",
+      "level": "L",
+      "long": true,
+      "timeoutSeconds": 600,
+      "description": "Records the current state of the computer (overview of every module: values, lists, findings) in SysInfo's own data folder, to compare it later with reports_compare (before / after an intervention). Changes nothing on the system.",
+      "parameters": [
+        { "name": "label", "label": "Libellé", "type": "string", "description": "Short label, e.g. avant-intervention." }
+      ]
+    },
+    {
+      "name": "list_snapshots",
+      "title": "Instantanés enregistrés",
+      "help": "Liste les instantanés enregistrés (date, libellé, taille), à utiliser dans « Comparer » ou dans le rapport d'intervention.",
+      "command": "Get-SISnapshots",
+      "level": "L",
+      "description": "Recorded snapshots: id, date, label, size.",
+      "parameters": []
+    },
+    {
+      "name": "compare",
+      "title": "Comparer (avant / après)",
+      "help": "Compare un instantané avec l'état actuel (ou avec un autre instantané) : score avant/après, problèmes résolus, nouveaux constats, valeurs et listes modifiées (logiciels, services, tâches…). « latest » = le dernier instantané.",
+      "command": "Compare-SISnapshots",
+      "level": "L",
+      "long": true,
+      "timeoutSeconds": 600,
+      "description": "Compares a snapshot with another one or with the current state: score before and after, findings resolved and new, values changed (stable modules) and lists changed (items added and removed: software, services, tasks, containers…). Live load values (CPU, network, sensors) are not compared.",
+      "parameters": [
+        { "name": "from", "label": "Avant", "type": "string", "description": "Snapshot id or label, latest or previous.", "default": "latest" },
+        { "name": "to", "label": "Après", "type": "string", "description": "now (collect now) or a snapshot id or label.", "default": "now" }
+      ]
+    },
+    {
+      "name": "export",
+      "title": "Exporter un rapport",
+      "help": "Enregistre un rapport de la machine dans Documents/SysInfo/Exports : HTML (lisible et imprimable), Markdown, JSON (données complètes) ou CSV (les constats). « Anonymiser » masque les noms, n° de série, adresses IP et MAC et e-mails avant de partager.",
+      "command": "Export-SIReport",
+      "level": "A",
+      "description": "Writes a report of the computer in Documents/SysInfo/Exports (never overwritten): html (printable, score, findings and every module), markdown, json (full data) or csv (findings, one per line). Optional anonymization masks user, computer and domain names, serial numbers, IP and MAC addresses and e-mail addresses. Use modules to limit it (comma-separated ids).",
+      "parameters": [
+        { "name": "format", "label": "Format", "type": "string", "description": "html, markdown, json or csv.", "enum": ["html", "markdown", "json", "csv"], "default": "html" },
+        { "name": "modules", "label": "Modules", "type": "string", "description": "Module ids separated by commas (default: all)." },
+        { "name": "anonymize", "label": "Anonymiser", "type": "boolean", "description": "Mask names, serial numbers, IP and MAC addresses and e-mails.", "default": false }
+      ]
+    },
+    {
+      "name": "client_report",
+      "title": "Rapport d'intervention (client)",
+      "help": "Crée le rapport d'intervention pour le client (HTML imprimable, à enregistrer en PDF depuis le navigateur) : fiche machine, actions faites avec SysInfo sur la période, avant/après si un instantané est indiqué, points à surveiller et notes. Logo : déposer Documents/SysInfo/logo.png.",
+      "command": "New-SIClientReport",
+      "level": "A",
+      "long": true,
+      "timeoutSeconds": 600,
+      "description": "Writes a printable HTML intervention report for the customer in Documents/SysInfo/Exports, with the Justware logo (Documents/SysInfo/logo.png or .svg if present): customer, technician, machine card, health score (before / after when a snapshot is given), actions done through SysInfo over the period (audit log, with their changes), resolved and new findings, remaining points with recommendations, technician notes. Save as PDF from the browser's print dialog. Optional anonymization.",
+      "parameters": [
+        { "name": "client", "label": "Client", "type": "string", "description": "Customer name." },
+        { "name": "technician", "label": "Technicien", "type": "string", "description": "Technician name." },
+        { "name": "sinceHours", "label": "Période (heures)", "type": "integer", "description": "Actions of the last N hours are listed.", "minimum": 1, "maximum": 720, "default": 24 },
+        { "name": "before", "label": "Instantané « avant »", "type": "string", "description": "Snapshot id or label taken before the intervention (latest, previous…), for the before / after part." },
+        { "name": "notes", "label": "Notes", "type": "string", "description": "Technician notes printed in the report." },
+        { "name": "anonymize", "label": "Anonymiser", "type": "boolean", "description": "Mask names, serial numbers, IP and MAC addresses and e-mails.", "default": false }
+      ]
+    }
+  ]
+}

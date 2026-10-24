@@ -28,6 +28,7 @@ public partial class ModuleTabViewModel : NavPageViewModel, IDisposable
     {
         _module = module;
         _runner = new ModuleRunner(module);
+        Host.ModuleHost.Register(_runner);
 
         if (module.Manifest.RefreshSeconds > 0)
         {
@@ -74,38 +75,7 @@ public partial class ModuleTabViewModel : NavPageViewModel, IDisposable
 
     partial void OnSectionsChanged(IReadOnlyList<SectionViewModel> value)
     {
-        // Consecutive single-series Metric → MetricGroup (compact cards in a row, charts under them);
-        // consecutive two-series Metric → ChartGroup (wide charts, two per row).
-        var blocks = new List<ViewModelBase>();
-        var metrics = new List<MetricSectionViewModel>();
-        var charts = new List<MetricSectionViewModel>();
-
-        void Flush()
-        {
-            if (metrics.Count > 0)
-                blocks.Add(new MetricGroupViewModel([.. metrics]));
-            if (charts.Count > 0)
-                blocks.Add(new ChartGroupViewModel([.. charts]));
-            metrics.Clear();
-            charts.Clear();
-        }
-
-        foreach (var section in value)
-        {
-            if (section is MetricSectionViewModel metric)
-            {
-                var target = metric.IsDual ? charts : metrics;
-                if ((metric.IsDual ? metrics : charts).Count > 0)
-                    Flush();
-                target.Add(metric);
-                continue;
-            }
-            Flush();
-            blocks.Add(section);
-        }
-        Flush();
-
-        Blocks = blocks;
+        Blocks = SectionBlocks.Build(value);
     }
 
     /// <summary>Normalized findings of the module, worst first, shown above the sections.</summary>
@@ -279,7 +249,7 @@ public partial class ModuleTabViewModel : NavPageViewModel, IDisposable
         }
 
         // Charts are laid out by time over the module's normal rhythm (samples are sparser while the page is hidden).
-        foreach (var metric in Sections.OfType<MetricSectionViewModel>())
+        foreach (var metric in Sections.OfType<MetricSectionViewModel>().Where(m => !m.HasHistory))
             metric.ChartWindow = TimeSpan.FromSeconds(_module.Manifest.RefreshSeconds * (MetricSectionViewModel.HistoryLength - 1));
 
         // The tab carries the worst state of its Metric / Usage thresholds and of its findings.

@@ -1,0 +1,99 @@
+{
+  "id": "diagnose",
+  "title": "Diagnostic guidé",
+  "icon": "search",
+  "order": 97,
+  "refreshSeconds": 300,
+  "platforms": [
+    "windows",
+    "linux"
+  ],
+  "requiresAdmin": false,
+  "description": "Guided diagnosis: one tool per problem (slow PC, no Internet, crashes, full disk, unwanted wake-ups, printer, suspected malware) that chains the relevant SysInfo modules and returns the probable causes ranked with their evidence and the next step. The overview lists the scenarios with the current signs found in the modules' latest data. Read-only: fixes go through the modules' actions.",
+  "functions": [
+    {
+      "name": "slow_pc",
+      "title": "PC lent",
+      "help": "Cherche pourquoi l'ordinateur est lent : ressource saturée, mémoire, processus gourmands sur la dernière heure, surchauffe, économie d'énergie, disque plein ou en mauvais état, démarrage, programmes au démarrage. Le résultat classe les causes probables et indique l'outil à utiliser ensuite. Rien n'est modifié.",
+      "command": "Get-SIDiagnosisSlowPc",
+      "level": "L",
+      "long": true,
+      "timeoutSeconds": 300,
+      "description": "The computer is slow: checks saturated resources (CPU, memory, disk), memory and swap, processes that used the most CPU over the last hour, temperature and throttling, power plan limits, disk space and health, boot duration, startup programs, pending reboot and recent hardware errors. Returns the probable causes ranked, the checks done and the next step for each (usually a SysInfo action).",
+      "parameters": []
+    },
+    {
+      "name": "no_internet",
+      "title": "Pas d'Internet / Wi-Fi instable",
+      "help": "Vérifie la connexion dans l'ordre : câble ou Wi-Fi, adresse IP, box (passerelle), DNS, puis Internet ; il s'arrête au premier maillon en panne et dit quoi faire. Contrôle aussi la qualité (signal Wi-Fi, pertes, latence, proxy). Rien n'est modifié.",
+      "command": "Get-SIDiagnosisNoInternet",
+      "level": "L",
+      "long": true,
+      "timeoutSeconds": 300,
+      "description": "No Internet or unstable connection: checks in order the link (cable or Wi-Fi), the IP address (DHCP), the gateway (ping), DNS resolution and Internet access (1.1.1.1 port 443), stopping at the first failure, then connection quality (Wi-Fi signal, packet loss, latency, proxy, hosts file). Returns the probable causes ranked and the next step.",
+      "parameters": []
+    },
+    {
+      "name": "crashes",
+      "title": "Écrans bleus / plantages",
+      "help": "Pour les écrans bleus, plantages du noyau, arrêts brutaux ou applications qui plantent : relève les plantages récents, erreurs matérielles, températures, pilotes, disques, et les installations faites juste avant un plantage. Les causes sont classées avec l'étape suivante.",
+      "command": "Get-SIDiagnosisCrashes",
+      "level": "L",
+      "long": true,
+      "timeoutSeconds": 300,
+      "description": "Blue screens, kernel panics, unexpected shutdowns or crashing applications: crashes of the last 7 days, hardware errors (WHEA/MCE) and out-of-memory kills, temperatures, drivers and devices in error, disk health, and installations (drivers, updates) in the 14-day timeline just before a crash. Returns the probable causes ranked and the next step.",
+      "parameters": []
+    },
+    {
+      "name": "disk_full",
+      "title": "Disque plein",
+      "help": "Quand un disque est plein : remplissage des volumes, espace récupérable par catégorie (caches, corbeille, journaux, conteneurs) et état de la sauvegarde avant de supprimer. Rien n'est supprimé : l'étape suivante indique l'outil de nettoyage à utiliser.",
+      "command": "Get-SIDiagnosisDiskFull",
+      "level": "L",
+      "long": true,
+      "timeoutSeconds": 300,
+      "description": "A disk is full: fill level of each volume, reclaimable space by category (caches, trash, logs…), unused container images and build cache, cleanup estimate, backup state before deleting, and the next step (cleanup action or space analysis).",
+      "parameters": []
+    },
+    {
+      "name": "wake_issues",
+      "title": "Ne s'éteint pas / se réveille seul",
+      "help": "Quand l'ordinateur se réveille seul ou ne s'éteint pas vraiment : réveils des 14 derniers jours et leur source, minuteries et périphériques autorisés à réveiller, démarrage rapide de Windows.",
+      "command": "Get-SIDiagnosisWake",
+      "level": "L",
+      "long": true,
+      "timeoutSeconds": 300,
+      "description": "The computer wakes up by itself or does not really shut down: wake history of the last 14 days with wake sources, timers allowed to wake it, devices armed for wake, and Windows Fast Startup. Returns the probable causes ranked and the next step.",
+      "parameters": []
+    },
+    {
+      "name": "printer",
+      "title": "Imprimante en panne",
+      "help": "Quand une imprimante n'imprime pas : service d'impression, travaux bloqués, état de l'imprimante, imprimante joignable sur le réseau, connexion de l'ordinateur. Laisser le champ vide pour l'imprimante par défaut.",
+      "command": "Get-SIDiagnosisPrinter",
+      "level": "L",
+      "long": true,
+      "timeoutSeconds": 300,
+      "description": "A printer does not print: print service (spooler / CUPS), stuck jobs, printer state and problems, network reachability of the printer, and the computer's own network connection. Returns the probable causes ranked and the next step.",
+      "parameters": [
+        {
+          "name": "name",
+          "label": "Imprimante",
+          "type": "string",
+          "description": "Printer name; omit for the default printer."
+        }
+      ]
+    },
+    {
+      "name": "malware",
+      "title": "Suspicion de logiciel malveillant",
+      "help": "En cas de doute sur un logiciel malveillant : antivirus, programmes lancés automatiquement suspects, tâches planifiées suspectes, processus non signés, connexions sortantes inhabituelles, protections désactivées. Il recommande toujours, en dernier, une analyse antivirus complète.",
+      "command": "Get-SIDiagnosisMalware",
+      "level": "L",
+      "long": true,
+      "timeoutSeconds": 300,
+      "description": "Suspected malware: antivirus state and detected threats, suspicious persistence points (startup, services, tasks…), suspicious scheduled tasks, unsigned processes (Windows), processes with many outbound Internet connections, disabled protections (firewall, UAC, added root certificates) and unexplained CPU load. Returns the probable causes ranked and the next step (always ends with a full antivirus scan).",
+      "parameters": []
+    }
+  ]
+}

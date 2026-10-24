@@ -34,6 +34,8 @@ public static class McpServerHost
         AuditLog.Purge(settings.AuditRetentionDays);
 
         var runners = result.Modules.Select(m => new ModuleRunner(m)).ToList();
+        foreach (var runner in runners)
+            Host.ModuleHost.Register(runner);
         var jobs = new JobManager();
         try
         {

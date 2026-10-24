@@ -22,6 +22,9 @@ public sealed class ModuleRunner(LoadedModule module) : IDisposable
 
     public LoadedModule Module { get; } = module;
 
+    /// <summary>Last overview (Get-ModuleData) and when it ended: reused by the aggregating modules (<see cref="Host.ModuleHost"/>).</summary>
+    public (PSObject Data, DateTime At)? LastOverview { get; private set; }
+
     /// <summary>
     /// Runs Get-ModuleData (<paramref name="function"/> null) or a declared function with bound arguments.
     /// With <paramref name="dryRun"/>, the action gets -DryRun: it returns its preview and changes nothing.
@@ -38,7 +41,10 @@ public sealed class ModuleRunner(LoadedModule module) : IDisposable
         if (dryRun)
             parameters["DryRun"] = true;
 
-        return await space.InvokeTimedAsync(function?.Command ?? "Get-ModuleData", parameters, cancellationToken, function?.Timeout, sink);
+        var result = await space.InvokeTimedAsync(function?.Command ?? "Get-ModuleData", parameters, cancellationToken, function?.Timeout, sink);
+        if (function is null)
+            LastOverview = (result.Data, DateTime.UtcNow);
+        return result;
     }
 
     /// <summary>

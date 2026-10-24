@@ -1,0 +1,24 @@
+{
+  "id": "inventory",
+  "title": "Inventaire",
+  "icon": "desktop",
+  "order": 94,
+  "refreshSeconds": 3600,
+  "platforms": ["windows", "linux"],
+  "requiresAdmin": false,
+  "description": "Inventory card of this computer in one call: name, type (desktop, laptop, VM…), manufacturer, model, serial number (Linux: root), motherboard, BIOS and its date, CPU (cores, threads, frequency), memory, disks (model, size, SSD/HDD, bus), graphics card, operating system and install date, main IP and MAC address, domain, main user and accounts; warranty check link for the manufacturer; upgrade capacity (installed and maximum memory, memory slots used and free with the modules, expansion slots with administrator/root rights); Windows 11 compatibility (CPU, memory, storage, UEFI, Secure Boot, TPM 2.0); network cards. Findings flag upgradable memory, a serial needing root, and Windows 11 incompatibility (warning on Windows 10).",
+  "functions": [
+    {
+      "name": "create_label",
+      "title": "Étiquette d'inventaire (QR code)",
+      "help": "Crée une étiquette d'inventaire imprimable (fichier SVG dans Documents/SysInfo/Exports) avec un QR code : nom de la machine, modèle, n° de série, adresse MAC et date, plus le n° d'inventaire et l'attribution si on les remplit. Ouvrir le fichier dans un navigateur pour l'imprimer.",
+      "command": "New-SIInventoryLabel",
+      "level": "A",
+      "description": "Creates a printable inventory label (SVG) in Documents/SysInfo/Exports: computer name, model, serial number, optional asset tag and owner, MAC address, date, and a QR code holding the same information (plain text readable by any QR reader). Never overwrites a file.",
+      "parameters": [
+        { "name": "assetTag", "label": "N° d'inventaire", "type": "string", "description": "Asset tag printed on the label (optional)." },
+        { "name": "owner", "label": "Attribué à", "type": "string", "description": "Person or department the computer is assigned to (optional)." }
+      ]
+    }
+  ]
+}
