@@ -1,0 +1,45 @@
+{
+  "id": "printing",
+  "title": "Impression & Périphériques",
+  "icon": "desktop",
+  "order": 88,
+  "refreshSeconds": 60,
+  "platforms": ["windows", "linux"],
+  "requiresAdmin": false,
+  "description": "Printing and peripherals of this computer: print service state (Windows Spooler, CUPS) and its errors over 7 days; printers (state, problem such as offline, paper or toner, default, address or port with credentials masked, driver or model, shared, network, virtual PDF/XPS printers); print jobs waiting in the queues; scanners (Windows imaging devices, SANE scanimage, cached 10 min); Bluetooth adapter and paired devices (connected, type, battery). Findings flag a stopped print service, a printer in trouble, stuck jobs (older than 30 min or in error), no default printer, a shared printer, a low Bluetooth battery and Bluetooth turned off with paired devices. Clearing a queue and restarting the spooler: maintenance_reset_print_queue.",
+  "functions": [
+    {
+      "name": "get_printer",
+      "title": "Détail d'une imprimante",
+      "help": "Détail d'une imprimante (par défaut si le champ est vide) : état, problème signalé, pilote, adresse, partage, documents en attente, et si elle répond sur le réseau.",
+      "command": "Get-SIPrinter",
+      "level": "L",
+      "description": "One printer in detail (default: the default printer): state and problem, driver or model, port and address (credentials masked), network reachability (IPP 631 / RAW 9100), sharing, CUPS state reasons and location, and its waiting jobs.",
+      "parameters": [
+        { "name": "name", "label": "Imprimante", "type": "string", "description": "Printer name; omit for the default printer." }
+      ]
+    },
+    {
+      "name": "list_jobs",
+      "title": "Travaux d'impression",
+      "help": "Documents en attente d'impression, toutes imprimantes ou une seule : propriétaire, heure d'envoi, nombre de pages, état. Un document ancien ou en erreur bloque souvent la file.",
+      "command": "Get-SIPrintJobs",
+      "level": "L",
+      "description": "Print jobs waiting in the queues: printer, job number, document name, owner, submit time, pages, size, state.",
+      "parameters": [
+        { "name": "printer", "label": "Imprimante", "type": "string", "description": "Only the jobs of this printer." }
+      ]
+    },
+    {
+      "name": "print_test_page",
+      "title": "Imprimer une page de test",
+      "help": "Imprime la page de test de l'imprimante (par défaut si le champ est vide) pour vérifier que l'impression fonctionne. Consomme une feuille.",
+      "command": "Invoke-SIPrintTestPage",
+      "level": "A",
+      "description": "Prints the test page of a printer (default: the default printer) to check that printing works. Windows: Win32_Printer.PrintTestPage; Linux: lp with the CUPS test page. Blocked for virtual printers (PDF, XPS, file) and stopped or offline printers. Uses one sheet of paper.",
+      "parameters": [
+        { "name": "name", "label": "Imprimante", "type": "string", "description": "Printer name; omit for the default printer." }
+      ]
+    }
+  ]
+}

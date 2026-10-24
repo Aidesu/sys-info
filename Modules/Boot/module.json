@@ -1,0 +1,35 @@
+{
+  "id": "boot",
+  "title": "Démarrage",
+  "icon": "play",
+  "order": 82,
+  "refreshSeconds": 60,
+  "platforms": ["windows", "linux"],
+  "requiresAdmin": false,
+  "description": "Startup of this computer: last boot time and duration of each stage (firmware, boot loader, kernel, initrd, services or until the desktop), what delays it (Linux systemd critical chain and slowest units; Windows Diagnostics-Performance events 101-110, administrator), duration of the previous boots (chart), boot loader (GRUB, systemd-boot or Windows Boot Manager: menu timeout, default entry, kernel command line), UEFI boot order and entries (Linux efibootmgr; Windows bcdedit /enum firmware, administrator), installed kernels (Linux). Findings flag a slow or slower-than-usual boot, a slow firmware, units that delay the boot, a newer kernel waiting for a reboot, a single kernel without fallback and an external device first in the UEFI order. Changing the boot loader (bcdedit /set, GRUB) is never offered.",
+  "functions": [
+    {
+      "name": "get_history",
+      "title": "Démarrages précédents",
+      "help": "Durée des derniers démarrages, étape par étape : micrologiciel (BIOS/UEFI), gestionnaire de démarrage, noyau, puis services jusqu'au bureau. Utile pour voir si la machine démarre de plus en plus lentement. Sous Windows, ces durées demandent les droits administrateur.",
+      "command": "Get-SIBootHistory",
+      "level": "L",
+      "description": "Previous boots of this computer with their total duration and the duration of each stage (firmware, loader, kernel, initrd, services / until the desktop), plus median, fastest and slowest. Linux: systemd journal; Windows: Diagnostics-Performance event 100 (administrator).",
+      "parameters": [
+        { "name": "top", "label": "Démarrages affichés (les plus récents)", "type": "integer", "description": "Number of most recent boots returned.", "minimum": 1, "maximum": 100, "default": 30 }
+      ]
+    },
+    {
+      "name": "analyze",
+      "title": "Analyse du démarrage",
+      "help": "Tout ce qui a démarré au dernier démarrage et combien de temps chaque élément a pris, les plus lents d'abord. « Durée minimale » masque ce qui est plus rapide. Sous Linux, la chaîne critique montre ce qui retarde vraiment l'arrivée du bureau.",
+      "command": "Get-SIBootAnalysis",
+      "level": "L",
+      "description": "Everything that started during boot and how long it took. Linux: every systemd unit (systemd-analyze blame) and the critical chain of the current boot; Windows: applications, drivers, services and devices that slowed the recent boots (Diagnostics-Performance 101-110, administrator), with the delay they caused.",
+      "parameters": [
+        { "name": "top", "label": "Éléments affichés (les plus lents)", "type": "integer", "description": "Number of items returned, slowest first.", "minimum": 1, "maximum": 500, "default": 50 },
+        { "name": "minSeconds", "label": "Durée minimale (s)", "type": "number", "description": "Only items that took at least this long.", "minimum": 0, "maximum": 600, "default": 0 }
+      ]
+    }
+  ]
+}

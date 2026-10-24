@@ -1,0 +1,63 @@
+{
+  "id": "tasks",
+  "title": "Tâches planifiées",
+  "icon": "timer",
+  "order": 84,
+  "refreshSeconds": 120,
+  "platforms": ["windows", "linux"],
+  "requiresAdmin": false,
+  "description": "Scheduled tasks of this computer: Windows Task Scheduler (all tasks, hidden ones included; the list shows those outside \\Microsoft\\), Linux systemd timers (system and user) and cron jobs (user crontab, /etc/crontab, /etc/cron.d, anacron, /etc/cron.<period> scripts): schedule, command (obvious secrets masked), account, enabled, last run and result, next run. Summary, failed tasks, suspicious tasks (program in a temporary or public folder, encoded or downloading command, misused system tools, unsigned program in a user-writable folder, reverse shell) and the next runs. Findings flag failed (TSK-FAILED), suspicious (TSK-SUSPICIOUS) and missed tasks. Creating or deleting a task is never offered.",
+  "functions": [
+    {
+      "name": "list",
+      "title": "Liste des tâches",
+      "help": "Liste les tâches planifiées (Planificateur de tâches, minuteries systemd, crons) filtrées par texte, état et source. Décocher « Tâches Microsoft » sous Windows pour ne garder que celles ajoutées par des logiciels.",
+      "command": "Get-SITasks",
+      "level": "L",
+      "description": "Scheduled tasks filtered by text (name, folder, command), state (enabled, disabled, failed, suspicious) and source (system, user, cron); Windows \\Microsoft\\ tasks can be left out.",
+      "parameters": [
+        { "name": "filter", "label": "Filtre", "type": "string", "description": "Keep only tasks whose name, folder or command contains this text." },
+        { "name": "state", "label": "État", "type": "string", "description": "all, enabled, disabled, failed or suspicious.", "enum": ["all", "enabled", "disabled", "failed", "suspicious"], "default": "all" },
+        { "name": "source", "label": "Source", "type": "string", "description": "all, system (Task Scheduler / systemd system timers), user (systemd --user) or cron.", "enum": ["all", "system", "user", "cron"], "default": "all" },
+        { "name": "includeMicrosoft", "label": "Tâches Microsoft", "type": "boolean", "description": "Windows: include the tasks under \\Microsoft\\.", "default": true },
+        { "name": "top", "label": "Tâches affichées (max.)", "type": "integer", "description": "Maximum number of tasks returned.", "minimum": 1, "maximum": 1000, "default": 100 }
+      ]
+    },
+    {
+      "name": "get_task",
+      "title": "Détail d'une tâche",
+      "help": "Détail d'une tâche planifiée : planification, commande, compte, dernière exécution et résultat, et l'historique de ses exécutions.",
+      "command": "Get-SITask",
+      "level": "L",
+      "description": "One scheduled task in detail: schedule, command, account, state, last run and result, next run, suspicious signs, and the history of its runs (Linux: journal of the service it starts; Windows: TaskScheduler/Operational log when enabled).",
+      "parameters": [
+        { "name": "name", "label": "Tâche", "type": "string", "description": "Task name or path (Windows \\Folder\\Name), or timer name (Linux, with or without .timer).", "required": true },
+        { "name": "lines", "label": "Lignes de journal", "type": "integer", "description": "Number of journal lines.", "minimum": 1, "maximum": 200, "default": 30 }
+      ]
+    },
+    {
+      "name": "run",
+      "title": "Exécuter une tâche",
+      "help": "Lance une tâche planifiée tout de suite, sans attendre son heure. Les crons et, sous Linux, les tâches du système (sans root) sont refusés.",
+      "command": "Start-SITask",
+      "level": "A",
+      "description": "Runs a scheduled task now (Windows: Task Scheduler Run; Linux: starts the service of the systemd timer). Blocked for cron jobs, for system timers without root, for a disabled Windows task and for a task already running.",
+      "parameters": [
+        { "name": "name", "label": "Tâche", "type": "string", "description": "Task name or path, or timer name.", "required": true }
+      ]
+    },
+    {
+      "name": "set_enabled",
+      "title": "Activer / désactiver une tâche",
+      "help": "Active ou désactive une tâche planifiée. Sous Linux, décocher « Aussi aux prochains démarrages » pour ne l'arrêter que jusqu'au prochain redémarrage. Annulable depuis l'Audit.",
+      "command": "Set-SITaskEnabled",
+      "level": "A",
+      "description": "Enables or disables a scheduled task (Windows: task Enabled; Linux: systemctl [--user] enable/disable --now of the timer, or start/stop). Blocked for cron jobs, system timers without root and essential maintenance timers. Undoable.",
+      "parameters": [
+        { "name": "name", "label": "Tâche", "type": "string", "description": "Task name or path, or timer name.", "required": true },
+        { "name": "enabled", "label": "Activée", "type": "boolean", "description": "true to enable, false to disable.", "required": true },
+        { "name": "persistent", "label": "Aussi aux prochains démarrages", "type": "boolean", "description": "Linux: true = systemctl enable/disable --now (kept after a reboot); false = start/stop only until the next boot. A timer started by another unit without being enabled is only stopped. Ignored on Windows.", "default": true }
+      ]
+    }
+  ]
+}

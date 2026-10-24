@@ -1,0 +1,39 @@
+{
+  "id": "virtualization",
+  "title": "Virtualisation & Conteneurs",
+  "icon": "server",
+  "order": 90,
+  "refreshSeconds": 30,
+  "platforms": ["windows", "linux"],
+  "requiresAdmin": false,
+  "description": "Virtualization on this computer: hardware prerequisites (Intel VT-x / AMD-V, SLAT, enabled in the BIOS/UEFI, Windows hypervisor present, Linux KVM and /dev/kvm access, nested virtualization), virtual machines (KVM/libvirt system and session, Hyper-V with administrator rights, VirtualBox: state, vCPUs, memory), WSL distributions (state, version), Docker and Podman containers (state, health, published ports, compose project, image) and the space used by images, containers, volumes and build cache with the reclaimable part. Container environment variables, labels and logs are never exposed. Findings flag virtualization disabled in the BIOS, a missing KVM module, no /dev/kvm access, a crashed VM, WSL 1, unhealthy, restart-looping or failed containers, an unreachable or forbidden container engine and more than 10 GB reclaimable.",
+  "functions": [
+    {
+      "name": "list_containers",
+      "title": "Conteneurs, images et volumes",
+      "help": "Liste les conteneurs Docker et Podman (état, santé, ports, projet), filtrés par texte et état ; « Images et volumes » ajoute les images et volumes avec leur taille.",
+      "command": "Get-SIContainers",
+      "level": "L",
+      "description": "Docker and Podman containers (name, id, compose project, image, status, health, ports, creation), filtered by text and state, optionally with images (repository, tag, size, containers using them) and volumes.",
+      "parameters": [
+        { "name": "filter", "label": "Filtre", "type": "string", "description": "Keep only containers whose name, image or project contains this text." },
+        { "name": "state", "label": "État", "type": "string", "description": "all, running or stopped.", "enum": ["all", "running", "stopped"], "default": "all" },
+        { "name": "includeImages", "label": "Images et volumes", "type": "boolean", "description": "Also list images and volumes.", "default": false }
+      ]
+    },
+    {
+      "name": "control",
+      "title": "Démarrer / arrêter une VM ou un conteneur",
+      "help": "Démarre, arrête ou redémarre un conteneur ou une machine virtuelle par son nom. Un arrêt de VM est une demande d'extinction propre (comme le bouton d'alimentation). Préciser « Moteur » si le même nom existe ailleurs ; annulable.",
+      "command": "Set-SIVirtualState",
+      "level": "A",
+      "description": "Starts, stops or restarts a container (docker/podman start|stop|restart) or a virtual machine (libvirt virsh start|shutdown|reboot, Hyper-V state change with guest shutdown, VirtualBox headless start / ACPI power button / reset, WSL terminate or start). A VM stop is a clean shutdown request to the guest. Blocked when the target is unknown, ambiguous (give engine) or already in the requested state. Start and stop are undoable.",
+      "parameters": [
+        { "name": "name", "label": "Nom", "type": "string", "description": "Container name or id, VM name or WSL distribution.", "required": true },
+        { "name": "action", "label": "Action", "type": "string", "description": "start, stop or restart.", "enum": ["start", "stop", "restart"], "required": true },
+        { "name": "kind", "label": "Type", "type": "string", "description": "auto (search both), container or vm.", "enum": ["auto", "container", "vm"], "default": "auto" },
+        { "name": "engine", "label": "Moteur", "type": "string", "description": "Only search this engine.", "enum": ["docker", "podman", "libvirt", "hyperv", "virtualbox", "wsl"] }
+      ]
+    }
+  ]
+}

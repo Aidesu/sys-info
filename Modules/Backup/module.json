@@ -1,0 +1,23 @@
+{
+  "id": "backup",
+  "title": "Sauvegarde",
+  "icon": "arrow_download",
+  "order": 86,
+  "refreshSeconds": 300,
+  "platforms": ["windows", "linux"],
+  "requiresAdmin": false,
+  "description": "Backups of this computer: date and source of the last successful backup, backup tools found (restic, borg, Kopia, Déjà Dup, Pika, Vorta, Timeshift, snapper, Veeam, Macrium, Acronis, Backblaze…), backup jobs (systemd timers, cron, Windows scheduled tasks matching backup tools) with last run and result, Windows File History and Windows Backup, sync clients (OneDrive with protected known folders, Nextcloud, Syncthing, Dropbox, rclone remote names) and restore points / snapshots (Windows System Restore, snapper, Timeshift, ZFS; full list with administrator or root rights). Findings flag no backup (BAK-NONE), an old backup (BAK-OLD: warning after 7 days, critical after 30), a failed job, sync without backup and disabled restore points. Restore points are created by maintenance_create_restore_point. Repository credentials are never read.",
+  "functions": [
+    {
+      "name": "list_snapshots",
+      "title": "Points de restauration et instantanés",
+      "help": "Liste les points de restauration et instantanés de la machine (Restauration du système et clichés VSS sous Windows ; snapper, Timeshift ou ZFS sous Linux), du plus récent au plus ancien. Le champ limite le nombre de lignes. La liste complète demande les droits administrateur (root sous Linux).",
+      "command": "Get-SISnapshots",
+      "level": "L",
+      "description": "Restore points and snapshots: Windows System Restore points, VSS shadow copies and their reserved space (administrator); Linux snapper or Timeshift snapshots (root) and ZFS snapshots.",
+      "parameters": [
+        { "name": "top", "label": "Points affichés (les plus récents)", "type": "integer", "description": "Maximum number of snapshots returned, newest first.", "minimum": 1, "maximum": 500, "default": 100 }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "id": "domain",
+  "title": "Domaine & Configuration",
+  "icon": "globe",
+  "order": 92,
+  "refreshSeconds": 300,
+  "platforms": ["windows", "linux"],
+  "requiresAdmin": false,
+  "description": "Domain membership and configuration of this computer: join type (workgroup, Active Directory, Entra ID, hybrid, Linux realmd domain), domain and Entra tenant, domain controller reachability (LDAP 389 / Kerberos 88), secure channel (Windows nltest), sssd and Kerberos ticket (Linux), MDM enrollment (Intune), last Group Policy application for the computer and the user and policy errors over 7 days, LAPS (configured, directory, last rotation; never the password); PATH entries with duplicates, missing, relative or world-writable folders; watched settings (Linux kernel sysctl hardening and tuning values; Windows registry: long paths, WSUS, automatic updates, telemetry, automatic logon, AutoRun). Findings flag an unreachable controller, a broken secure channel, sssd down, old or failing Group Policy, missing or stale LAPS, PATH problems and weak settings.",
+  "functions": [
+    {
+      "name": "get_environment",
+      "title": "Variables d'environnement",
+      "help": "Liste les variables d'environnement et analyse le PATH (dossiers en double, absents ou dangereux). Les valeurs qui ressemblent à des secrets (mots de passe, jetons, clés) sont masquées. « Portée » : celles de SysInfo, ou sous Windows celles de la machine ou de l'utilisateur.",
+      "command": "Get-SIEnvironment",
+      "level": "L",
+      "description": "Environment variables (values of variables that look like secrets — token, secret, password, key… — are masked, as are credentials in URLs) for the SysInfo process, or the Windows machine and user scopes; Linux /etc/environment; and the PATH analysis (order, scope, state).",
+      "parameters": [
+        { "name": "filter", "label": "Filtre", "type": "string", "description": "Keep only variables whose name contains this text." },
+        { "name": "scope", "label": "Portée", "type": "string", "description": "process (SysInfo), machine, user (Windows registry scopes) or all.", "enum": ["process", "machine", "user", "all"], "default": "process" }
+      ]
+    },
+    {
+      "name": "get_sysctl",
+      "title": "Paramètres du noyau",
+      "help": "Valeurs des paramètres du noyau Linux (comme « sysctl -a »), filtrées par préfixe : kernel., net.ipv4., vm., fs.… Certains paramètres ne sont lisibles qu'en root.",
+      "command": "Get-SISysctl",
+      "level": "L",
+      "platforms": ["linux"],
+      "description": "Linux kernel parameters (/proc/sys, as sysctl -a) under a prefix (kernel., net.ipv4., vm., fs.…); parameters readable only by root are counted.",
+      "parameters": [
+        { "name": "prefix", "label": "Préfixe", "type": "string", "description": "Parameter prefix, e.g. net.ipv4. or vm.", "default": "kernel." },
+        { "name": "top", "label": "Paramètres affichés (max.)", "type": "integer", "description": "Maximum number of parameters returned.", "minimum": 1, "maximum": 2000, "default": 300 }
+      ]
+    },
+    {
+      "name": "get_gpo",
+      "title": "Stratégies de groupe appliquées",
+      "help": "Stratégies de groupe (GPO) appliquées à l'utilisateur et, en administrateur, à l'ordinateur : nom, état (appliquée, refusée, filtrée) et extensions en erreur. Utile sur un poste d'entreprise dont un réglage imposé ne s'applique pas.",
+      "command": "Get-SIGpo",
+      "level": "L",
+      "platforms": ["windows"],
+      "description": "Group Policy Objects applied to the computer (administrator) and to the user (gpresult /x): name, state (applied, denied, WMI-filtered, invalid, disabled), linked organizational unit, and policy extensions in error.",
+      "parameters": []
+    },
+    {
+      "name": "force_gpupdate",
+      "title": "Réappliquer les stratégies de groupe",
+      "help": "Réapplique tout de suite les stratégies de groupe du domaine (gpupdate /force), au lieu d'attendre le cycle automatique. Sans droits administrateur, seules celles de l'utilisateur sont réappliquées. Certaines ne prennent effet qu'à la prochaine ouverture de session.",
+      "command": "Invoke-SIGpupdate",
+      "level": "A",
+      "platforms": ["windows"],
+      "long": true,
+      "timeoutSeconds": 300,
+      "description": "Reapplies the Group Policy settings now (gpupdate /force). Without administrator rights only the user policies are refreshed. Blocked outside an Active Directory domain or when no domain controller is reachable. Some policies only apply at the next logon or reboot.",
+      "parameters": [
+        { "name": "target", "label": "Cible", "type": "string", "description": "all, computer (administrator) or user.", "enum": ["all", "computer", "user"], "default": "all" }
+      ]
+    }
+  ]
+}
