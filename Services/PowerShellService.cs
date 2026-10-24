@@ -17,6 +17,23 @@ public sealed class PowerShellService : IDisposable
     private readonly Runspace _runspace;
     private readonly SemaphoreSlim _lock = new(1, 1);
 
+    static PowerShellService()
+    {
+        // No PowerShell telemetry from SysInfo (it is on by default in a hosted PowerShell too).
+        Environment.SetEnvironmentVariable("POWERSHELL_TELEMETRY_OPTOUT", "1");
+
+        // PowerShell's own modules (Microsoft.PowerShell.Utility: Select-Object…) live in $PSHOME/Modules, $PSHOME being the
+        // folder of System.Management.Automation.dll. In a build they ship under runtimes/<os>/lib/net10.0, next to that dll;
+        // in a published app the dll sits next to the executable, so $PSHOME/Modules is SysInfo's own Modules folder and the
+        // built-in modules are not found. Their folder goes first in PSModulePath (also before Windows PowerShell 5.1's).
+        var builtIn = System.IO.Path.Combine(AppContext.BaseDirectory, "runtimes", OperatingSystem.IsWindows() ? "win" : "unix", "lib", "net10.0", "Modules");
+        if (!System.IO.Directory.Exists(builtIn))
+            return;
+        var current = Environment.GetEnvironmentVariable("PSModulePath");
+        Environment.SetEnvironmentVariable("PSModulePath",
+            string.IsNullOrEmpty(current) ? builtIn : builtIn + System.IO.Path.PathSeparator + current);
+    }
+
     public PowerShellService(string modulePath)
     {
         var state = InitialSessionState.CreateDefault2();

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=SysInfo
+GenericName=Informations système
+Comment=Informations système, diagnostic et maintenance
+Exec=@EXEC@
+Icon=@ICON@
+Terminal=false
+Categories=System;Monitor;
+Keywords=système;processeur;mémoire;disque;réseau;diagnostic;system;monitor;
+StartupWMClass=SysInfo

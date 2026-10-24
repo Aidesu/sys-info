@@ -5,7 +5,7 @@
         xmlns:conv="using:SysInfo.Converters"
         x:Class="SysInfo.Views.ConfirmWindow"
         x:DataType="vm:ConfirmViewModel"
-        Icon="/Assets/avalonia-logo.ico"
+        Icon="/Assets/sysinfo.ico"
         Title="SysInfo · Confirmer une action"
         Width="680" SizeToContent="Height" MaxHeight="820" MinWidth="520"
         WindowStartupLocation="CenterScreen"

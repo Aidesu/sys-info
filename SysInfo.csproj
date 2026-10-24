@@ -4,6 +4,11 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\sysinfo.ico</ApplicationIcon>
+    <Version>0.8.0</Version>
+    <Product>SysInfo</Product>
+    <!-- Localized resources of the libraries (PowerShell messages…): French and English only, not 13 languages. -->
+    <SatelliteResourceLanguages>fr;en</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>
