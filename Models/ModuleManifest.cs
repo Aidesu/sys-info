@@ -49,6 +49,12 @@ public sealed record ModuleFunction
     /// <summary>In French, for the window's Outils card (« Ping »). Default: the name.</summary>
     public string? Title { get; init; }
 
+    /// <summary>
+    /// In French, optional: help shown folded under the tool in the Outils card (what it is for, how to fill the
+    /// fields, what the result shows). Not sent to MCP clients (they read <see cref="Description"/>).
+    /// </summary>
+    public string? Help { get; init; }
+
     public AccessLevel Level { get; init; } = AccessLevel.L;
 
     /// <summary>Subset of the module's platforms; empty = same as the module.</summary>

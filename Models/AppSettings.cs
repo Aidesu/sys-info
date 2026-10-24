@@ -37,6 +37,9 @@ public sealed class AppSettings
     /// <summary>Column layout of the tables, by table (see TableLayouts).</summary>
     public Dictionary<string, TableLayout> TableLayouts { get; set; } = [];
 
+    /// <summary>Width of the unfolded sidebar, in pixels (dragged by its right edge). The sidebar starts folded.</summary>
+    public double SidebarWidth { get; set; } = 216;
+
     /// <summary>Audit log files older than this many days are deleted (0 = keep everything).</summary>
     public int AuditRetentionDays { get; set; } = 365;
 }

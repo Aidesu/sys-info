@@ -11,6 +11,7 @@
     {
       "name": "get_log",
       "title": "Journal",
+      "help": "Relit le journal de tout ce que SysInfo a fait : outils lancés depuis cette fenêtre ou par un agent IA, aperçus, actions confirmées ou refusées, erreurs. « Depuis » limite la période ; Origine, Type, Outil et Résultat filtrent les lignes. L'Id d'une ligne sert à annuler une action.",
       "command": "Get-SIAuditLog",
       "level": "L",
       "description": "Entries of the SysInfo audit log, newest first, filtered: id, time, origin (window or MCP client), account, tool, level, preview or not, confirmation, result, duration, parameters, finding codes, changes, restore point and error. Use the id with audit_undo.",
@@ -20,12 +21,13 @@
         { "name": "kind", "label": "Type", "type": "string", "description": "all, actions (levels A and C) or reads.", "enum": ["all", "actions", "reads"], "default": "all" },
         { "name": "tool", "label": "Outil", "type": "string", "description": "Keep only tools whose name contains this text." },
         { "name": "status", "label": "Résultat", "type": "string", "description": "Keep only this result.", "enum": ["all", "ok", "warning", "critical", "error", "blocked", "declined", "cancelled", "running"], "default": "all" },
-        { "name": "top", "label": "Nombre max.", "type": "integer", "description": "Maximum number of entries returned.", "minimum": 1, "maximum": 1000, "default": 100 }
+        { "name": "top", "label": "Entrées affichées (max.)", "type": "integer", "description": "Maximum number of entries returned.", "minimum": 1, "maximum": 1000, "default": 100 }
       ]
     },
     {
       "name": "undo",
       "title": "Annuler une action",
+      "help": "Annule une action passée en rejouant son action inverse (ex. réactiver un programme au démarrage que l'on avait désactivé). Copier l'Id depuis le Journal. « Simuler » montre ce qui serait rétabli. Seules les actions qui ont une annulation enregistrée peuvent être annulées.",
       "command": "Undo-SIAction",
       "level": "A",
       "description": "Undoes an action of the audit log (last 90 days) by running its recorded undo, a reverse action of the same module: start a stopped service, re-enable a startup item, restore a process priority… The preview is the reverse action's preview. Blocked when the entry changed nothing, has no undo, was already undone, or when the undo is itself a critical action (then call that tool directly).",
@@ -36,6 +38,7 @@
     {
       "name": "export_log",
       "title": "Exporter le journal",
+      "help": "Enregistre le journal d'audit de la période choisie dans Documents/SysInfo/Exports, par exemple pour le joindre à un ticket. Le fichier contient les noms des outils et leurs paramètres : à relire avant de le partager.",
       "command": "Export-SIAuditLog",
       "level": "A",
       "description": "Writes the audit log of a period to a new JSON file in Documents/SysInfo/Exports (never overwriting). Returns the file path, not its content.",

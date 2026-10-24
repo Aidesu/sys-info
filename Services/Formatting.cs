@@ -16,6 +16,12 @@ public static class Formatting
     /// <summary>Axis ticks: up to two decimals, so that 0.25 stays "0,25".</summary>
     public static string Tick(double value) => value.ToString("#,##0.##", French);
 
+    /// <summary>Span covered by a chart: "60 dernières minutes", "24 dernières heures", "7 derniers jours".</summary>
+    public static string Window(TimeSpan span) =>
+        span.TotalHours < 2 ? $"{Math.Round(span.TotalMinutes)} dernières minutes"
+        : span.TotalDays < 2 ? $"{Math.Round(span.TotalHours)} dernières heures"
+        : $"{Math.Round(span.TotalDays)} derniers jours";
+
     /// <summary>
     /// Table cells: integers stay ungrouped, because a table column often holds identifiers (PID, port)
     /// where "92 040" would read wrong; decimals are formatted as <see cref="Number"/>.

@@ -11,6 +11,7 @@
     {
       "name": "list",
       "title": "Logiciels installés",
+      "help": "Liste les logiciels installés selon la source (applications, Store, paquets, Flatpak, Snap), filtrés par texte et triés par nom, date ou taille.",
       "command": "Get-SISoftware",
       "level": "L",
       "description": "Installed software of this computer, filtered and sorted: name, version, publisher or source, install date, size and scope. Sources: applications (Windows programs from the uninstall registry; Linux desktop applications from packages, Flatpak, Snap and the user), store (Microsoft Store apps), packages (every Linux distribution package), flatpak, snap, or all.",
@@ -18,12 +19,13 @@
         { "name": "source", "label": "Source", "type": "string", "description": "applications, store (Windows), packages (Linux distribution packages), flatpak, snap, or all.", "enum": ["applications", "store", "packages", "flatpak", "snap", "all"], "default": "applications" },
         { "name": "filter", "label": "Texte", "type": "string", "description": "Keep only software whose name, publisher or description contains this text (case-insensitive)." },
         { "name": "sortBy", "label": "Tri", "type": "string", "description": "Sort by name, install date (newest first) or size (largest first).", "enum": ["name", "date", "size"], "default": "name" },
-        { "name": "top", "label": "Nombre max.", "type": "integer", "description": "Maximum number of entries returned.", "minimum": 1, "maximum": 5000, "default": 200 }
+        { "name": "top", "label": "Logiciels affichés (max.)", "type": "integer", "description": "Maximum number of entries returned.", "minimum": 1, "maximum": 5000, "default": 200 }
       ]
     },
     {
       "name": "get_pending_updates",
       "title": "Mises à jour en attente",
+      "help": "Recherche les mises à jour disponibles (Windows Update et winget ; dnf, apt, Flatpak sous Linux), en signalant les mises à jour de sécurité. Tâche longue ; « Actualiser les dépôts » interroge Internet d'abord.",
       "command": "Get-SIPendingUpdates",
       "level": "L",
       "long": true,
@@ -36,18 +38,20 @@
     {
       "name": "get_update_history",
       "title": "Historique des mises à jour",
+      "help": "Historique des installations et mises à jour sur la période, avec les échecs. « Détail des paquets » limite le nombre de paquets listés par opération.",
       "command": "Get-SIUpdateHistory",
       "level": "L",
       "description": "Update and install history of this computer over the last days: Windows Update operations with result and KB, installed hotfixes; dnf transactions (with the packages changed by the latest ones) or apt history on Linux.",
       "parameters": [
         { "name": "days", "label": "Jours", "type": "integer", "description": "Number of days covered.", "minimum": 1, "maximum": 730, "default": 90 },
-        { "name": "top", "label": "Nombre max.", "type": "integer", "description": "Maximum number of operations or transactions returned.", "minimum": 1, "maximum": 1000, "default": 100 },
+        { "name": "top", "label": "Opérations affichées (les plus récentes)", "type": "integer", "description": "Maximum number of operations or transactions returned.", "minimum": 1, "maximum": 1000, "default": 100 },
         { "name": "details", "label": "Détail des paquets", "type": "integer", "description": "Linux: list the packages changed by this many most recent transactions.", "minimum": 0, "maximum": 20, "default": 3 }
       ]
     },
     {
       "name": "set_startup",
       "title": "Programme au démarrage",
+      "help": "Active ou désactive un programme lancé à l'ouverture de session (nom tel qu'affiché dans la page Logiciels). Pris en compte à la prochaine ouverture de session ; annulable.",
       "command": "Set-SIStartupItem",
       "level": "A",
       "description": "Enables or disables one program started automatically at logon, without uninstalling it (reversible with the same action). Windows: the StartupApproved flag, as Task Manager does (Run keys and Startup folders; entries for all users need administrator rights). Linux: XDG autostart entries, through a copy in ~/.config/autostart with Hidden=true/false (system files are never changed), or systemd --user units (enable / disable). Takes effect at the next logon; the program is neither started nor stopped now. Use the names listed in get_software (Programmes au démarrage).",
@@ -59,6 +63,7 @@
     {
       "name": "install_updates",
       "title": "Installer les mises à jour",
+      "help": "Installe les mises à jour en attente (toutes ou seulement celles de sécurité). Action critique et longue : point de restauration avant, redémarrage parfois nécessaire.",
       "command": "Install-SIUpdates",
       "level": "C",
       "long": true,
@@ -72,6 +77,7 @@
     {
       "name": "uninstall",
       "title": "Désinstaller un logiciel",
+      "help": "Désinstalle un logiciel (nom tel qu'affiché dans la liste). Action critique : point de restauration avant ; les données de l'utilisateur peuvent être conservées ou non selon le logiciel.",
       "command": "Uninstall-SISoftware",
       "level": "C",
       "long": true,

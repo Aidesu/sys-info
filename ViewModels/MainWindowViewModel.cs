@@ -17,6 +17,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     public MainWindowViewModel(AppSettings settings)
     {
+        _settings = settings;
+        SidebarWidth = Math.Clamp(settings.SidebarWidth, SidebarMinWidth, SidebarMaxWidth);
         var result = ModuleLoader.Load(ModuleLoader.DefaultModulesDirectory);
 
         // Invalid modules never block the others; they are listed in Settings › About and on stderr.
@@ -91,14 +93,78 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             newValue.IsActive = true;
     }
 
+    private readonly AppSettings _settings;
+
+    /// <summary>Folded (icons only) at startup; unfolded by its button or by dragging its edge.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SidebarToggleLabel))]
-    public partial bool IsSidebarCollapsed { get; set; }
+    [NotifyPropertyChangedFor(nameof(SidebarToggleLabel), nameof(SidebarCurrentWidth))]
+    public partial bool IsSidebarCollapsed { get; set; } = true;
 
     public string SidebarToggleLabel => IsSidebarCollapsed ? "Déplier la barre latérale" : "Replier la barre latérale";
 
     [RelayCommand]
     private void ToggleSidebar() => IsSidebarCollapsed = !IsSidebarCollapsed;
+
+    public const double SidebarCollapsedWidth = 56;   // = SidebarWidthCollapsed (Tokens.axaml)
+    public const double SidebarDefaultWidth = 216;    // = SidebarWidth
+    private const double SidebarMinWidth = 168;
+    private const double SidebarMaxWidth = 420;
+
+    /// <summary>Width of the unfolded sidebar, chosen by dragging its right edge; kept in settings.json.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SidebarCurrentWidth))]
+    public partial double SidebarWidth { get; private set; } = SidebarDefaultWidth;
+
+    public double SidebarCurrentWidth => IsSidebarCollapsed ? SidebarCollapsedWidth : SidebarWidth;
+
+    /// <summary>While the edge is dragged, the width follows the pointer without animation.</summary>
+    [ObservableProperty]
+    public partial bool IsSidebarResizing { get; private set; }
+
+    private double _dragWidth;
+
+    /// <summary>Only the unfolded sidebar can be resized (the folded one keeps its icon width).</summary>
+    public void BeginSidebarResize()
+    {
+        if (IsSidebarCollapsed)
+            return;
+        IsSidebarResizing = true;
+        _dragWidth = SidebarWidth;
+    }
+
+    /// <summary>Follows the pointer, between the minimum and maximum widths; never folds or unfolds the sidebar.</summary>
+    public void ResizeSidebar(double delta)
+    {
+        if (!IsSidebarResizing)
+            return;
+        _dragWidth += delta;
+        SidebarWidth = Math.Clamp(_dragWidth, SidebarMinWidth, SidebarMaxWidth);
+    }
+
+    public void EndSidebarResize()
+    {
+        if (!IsSidebarResizing)
+            return;
+        IsSidebarResizing = false;
+        SaveSidebarWidth();
+    }
+
+    /// <summary>Double-click on the edge of the unfolded sidebar: back to the default width.</summary>
+    public void ResetSidebarWidth()
+    {
+        if (IsSidebarCollapsed)
+            return;
+        SidebarWidth = SidebarDefaultWidth;
+        SaveSidebarWidth();
+    }
+
+    private void SaveSidebarWidth()
+    {
+        if (Math.Abs(_settings.SidebarWidth - SidebarWidth) < 0.5)
+            return;
+        _settings.SidebarWidth = Math.Round(SidebarWidth);
+        SettingsService.Save(_settings);
+    }
 
     /// <summary>False when the OS asks for fewer animations: sidebar and skeletons stay still.</summary>
     public bool AnimationsEnabled { get; } = !MotionPreference.ReduceMotion;

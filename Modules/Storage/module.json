@@ -14,6 +14,7 @@
     {
       "name": "analyze_space",
       "title": "Analyse de l'espace",
+      "help": "Cherche les plus gros dossiers et fichiers d'un dossier ou d'un volume, pour savoir ce qui prend la place. Tâche longue ; « Durée max. » arrête l'analyse au bout du temps choisi (résultat partiel). Rien n'est supprimé.",
       "command": "Get-SISpaceUsage",
       "level": "L",
       "long": true,
@@ -27,7 +28,7 @@
         },
         {
           "name": "top",
-          "label": "Nombre",
+          "label": "Dossiers et fichiers affichés (les plus gros)",
           "type": "integer",
           "description": "Number of folders and files listed.",
           "minimum": 1,
@@ -48,6 +49,7 @@
     {
       "name": "get_reclaimable_space",
       "title": "Espace récupérable",
+      "help": "Estime la place libérable par catégorie (fichiers temporaires, caches, corbeille, journaux, conteneurs…) sans rien supprimer. Le nettoyage se fait avec l'outil Nettoyage de la page Maintenance.",
       "command": "Get-SIReclaimableSpace",
       "level": "L",
       "dependencies": [

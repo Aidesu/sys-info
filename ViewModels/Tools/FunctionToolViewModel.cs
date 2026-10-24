@@ -51,6 +51,17 @@ public partial class FunctionToolViewModel : ViewModelBase
 
     public bool HasParameters => Parameters.Count > 0;
 
+    /// <summary>Help of the tool (module.json › help), folded by default.</summary>
+    public string? Help => _function.Help;
+
+    public bool HasHelp => !string.IsNullOrWhiteSpace(Help);
+
+    [ObservableProperty]
+    public partial bool IsHelpExpanded { get; set; }
+
+    [RelayCommand]
+    private void ToggleHelp() => IsHelpExpanded = !IsHelpExpanded;
+
     /// <summary>Expander state, kept while the page is rebuilt.</summary>
     [ObservableProperty]
     public partial bool IsExpanded { get; set; }
@@ -61,7 +72,7 @@ public partial class FunctionToolViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasResult))]
-    public partial IReadOnlyList<SectionViewModel> Results { get; private set; } = [];
+    public partial IReadOnlyList<ViewModelBase> Results { get; private set; } = [];
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasFindings))]
@@ -217,7 +228,7 @@ public partial class FunctionToolViewModel : ViewModelBase
             if (SectionParser.ChangesSection(changes, dryRun) is { } table)
                 sections.Insert(0, table);
             Findings = findings;
-            Results = sections.Select(SectionViewModel.Create).ToList();
+            Results = SectionBlocks.Build([.. sections.Select(SectionViewModel.Create)], live: false);
             if (SectionParser.ParseBlocked(data) is { } blocked)
                 ErrorMessage = $"Action impossible : {blocked}";
 

@@ -14,13 +14,14 @@
     {
       "name": "get_processes",
       "title": "Liste des processus",
+      "help": "Liste les processus en cours, triés par processeur, mémoire, lectures/écritures disque ou nom, avec leur chemin et leur ligne de commande (secrets masqués). Le filtre garde ceux dont le nom contient le texte.",
       "command": "Get-SIProcesses",
       "level": "L",
       "description": "Running processes of this computer, sorted and filtered: name, PID, parent PID, CPU %, memory (MiB), disk read/written since start (MiB), user, start time, executable path, signature (Windows) and command line (obvious secrets such as --password=… are masked). Use it to find what slows the computer down or to check a process; the overview get_system only lists the 15 most active.",
       "parameters": [
         {
           "name": "top",
-          "label": "Nombre",
+          "label": "Processus affichés (les plus actifs)",
           "type": "integer",
           "description": "Number of processes returned.",
           "minimum": 1,
@@ -51,6 +52,7 @@
     {
       "name": "get_process_tree",
       "title": "Arbre des processus",
+      "help": "Montre quels processus en ont lancé d'autres (arbre parent → enfants), pour toute la machine ou à partir d'un PID. Utile pour savoir d'où vient un processus.",
       "command": "Get-SIProcessTree",
       "level": "L",
       "description": "Process tree of this computer (parent → children, indented names): PID, parent PID, number of children, CPU % and memory (MiB). Whole tree from the root processes, or the subtree of one process. Use it to see what launched a process or what a process launched.",
@@ -74,7 +76,7 @@
         },
         {
           "name": "top",
-          "label": "Lignes max.",
+          "label": "Lignes affichées (max.)",
           "type": "integer",
           "description": "Maximum number of rows returned.",
           "minimum": 1,
@@ -86,6 +88,7 @@
     {
       "name": "stop_process",
       "title": "Arrêter un processus",
+      "help": "Arrête un processus par son PID (visible dans la liste des processus). « Forcer » le tue sans lui laisser le temps d'enregistrer. Les processus essentiels du système sont refusés.",
       "command": "Stop-SIProcess",
       "level": "A",
       "description": "Stops one process of this computer by PID. Without force, asks it to close (Windows: closes its main window, else terminates it; Linux: SIGTERM) and waits 5 s; with force, kills it at once (unsaved data is lost). The preview shows the process (owner, path, command line, services or systemd unit it hosts, child processes). Refused for essential system or session processes, kernel threads, SysInfo itself, and other accounts' processes without administrator rights. Find the PID with system_get_processes.",
@@ -110,6 +113,7 @@
     {
       "name": "set_priority",
       "title": "Priorité d'un processus",
+      "help": "Change la priorité d'un processus (plus basse pour qu'il gêne moins, plus haute pour qu'il soit servi d'abord). Le réglage est perdu quand le processus redémarre.",
       "command": "Set-SIProcessPriority",
       "level": "A",
       "description": "Changes the CPU priority of one process until it exits (Windows priority class; Linux nice value: idle 19, below_normal 10, normal 0, above_normal -5, high -10). Real-time is never offered. On Linux, raising a priority (lower nice) needs root. The preview shows the current and new priority.",

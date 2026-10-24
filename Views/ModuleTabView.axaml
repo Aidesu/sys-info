@@ -25,15 +25,17 @@
                         <PathIcon Data="{StaticResource Icon.arrow_clockwise}" />
                     </Button>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space12}" VerticalAlignment="Center">
+                <!-- Le sous-titre prend la place restante et se raccourcit (…) sur une fenêtre étroite -->
+                <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="12" VerticalAlignment="Center" Margin="0,0,12,0">
                     <Border Classes="PageIcon">
                         <PathIcon Data="{Binding Icon, Converter={x:Static conv:IconConverter.Instance}}" />
                     </Border>
-                    <TextBlock Classes="PageTitle" Text="{Binding Title}" VerticalAlignment="Center" />
-                    <TextBlock Classes="Body" Foreground="{DynamicResource TextMuted}" Text="{Binding Subtitle}"
+                    <TextBlock Grid.Column="1" Classes="PageTitle" Text="{Binding Title}" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Column="2" Classes="Body" Foreground="{DynamicResource TextMuted}" Text="{Binding Subtitle}"
                                IsVisible="{Binding HasSubtitle}" VerticalAlignment="Center" Margin="0,3,0,0"
-                               TextTrimming="CharacterEllipsis" MaxWidth="560" ToolTip.Tip="{Binding Subtitle}" />
-                </StackPanel>
+                               TextTrimming="CharacterEllipsis" MaxWidth="900" HorizontalAlignment="Left" ToolTip.Tip="{Binding Subtitle}" />
+                </Grid>
             </DockPanel>
         </Border>
 
@@ -45,7 +47,7 @@
             <StackPanel>
 
                 <c:AnimatedHeight IsCollapsed="{Binding !HasError}">
-                    <Border Classes="Card" Margin="0,0,0,16">
+                    <Border Classes="Card" Margin="0,0,0,12">
                         <DockPanel>
                             <Panel DockPanel.Dock="Left" VerticalAlignment="Top" Margin="0,2,12,0">
                                 <PathIcon Data="{StaticResource Icon.error_circle}" Foreground="{DynamicResource Danger}"
@@ -67,7 +69,7 @@
 
                 <!-- Constats du module, les plus graves d'abord ; au-delà de quelques-uns, « Voir plus » -->
                 <c:AnimatedHeight IsCollapsed="{Binding !FindingList.HasFindings}">
-                    <Border Classes="Card" Margin="0,0,0,16">
+                    <Border Classes="Card" Margin="0,0,0,12">
                         <StackPanel>
                             <DockPanel Margin="0,0,0,12">
                                 <TextBlock DockPanel.Dock="Right" Classes="Caption" Text="{Binding FindingList.Summary}"
@@ -99,8 +101,8 @@
                 </c:AnimatedHeight>
 
                 <!-- Squelette : une carte de valeurs, une carte de métrique -->
-                <StackPanel Spacing="{StaticResource Space16}" IsVisible="{Binding ShowSkeleton}" Classes.Pulse="{Binding ShowSkeleton}"
-                            Margin="0,0,0,16" AutomationProperties.Name="Chargement du module">
+                <StackPanel Spacing="{StaticResource Space12}" IsVisible="{Binding ShowSkeleton}" Classes.Pulse="{Binding ShowSkeleton}"
+                            Margin="0,0,0,12" AutomationProperties.Name="Chargement du module">
                     <Border Classes="Card">
                         <StackPanel Spacing="{StaticResource Space12}">
                             <Border Classes="Skeleton" Width="120" Height="14" HorizontalAlignment="Left" />
@@ -123,17 +125,24 @@
                      les Metric consécutives forment un MetricGroup (cartes en ligne, graphiques dessous).
                      Fondu à l'arrivée des données ; hauteur animée quand un bloc grandit ou rétrécit. -->
                 <ItemsControl Classes="Blocks" Classes.Loading="{Binding ShowSkeleton}" ItemsSource="{Binding Blocks}">
+                    <!-- Une colonne sur un écran ordinaire ou en portrait ; deux ou trois sur un écran très large
+                         (21:9, 32:9), les graphiques et les tableaux très larges sur toute la largeur -->
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <c:MasonryPanel MinColumnWidth="820" MaxColumns="3" ColumnSpacing="12" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:ViewModelBase">
                             <c:AnimatedHeight>
-                                <ContentControl Content="{Binding}" Margin="0,0,0,16" />
+                                <ContentControl Content="{Binding}" Margin="0,0,0,12" />
                             </c:AnimatedHeight>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
                 <!-- Outils : fonctions ciblées du module (module.json › functions), même source que les outils MCP -->
-                <Border Classes="Card" IsVisible="{Binding HasTools}" Margin="0,0,0,16">
+                <Border Classes="Card" IsVisible="{Binding HasTools}" Margin="0,0,0,12">
                     <StackPanel Spacing="{StaticResource Space12}">
                         <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space8}">
                             <PathIcon Classes="CardIcon" Data="{StaticResource Icon.search}" />

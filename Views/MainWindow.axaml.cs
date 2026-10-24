@@ -13,6 +13,12 @@ public partial class MainWindow : Window
             PageHost.PageTransition = null;
         // Middle click: auto-scroll, as in a browser.
         Controls.AutoScroll.Attach(this);
+
+        // Sidebar edge: drag to resize (or unfold / fold), double-click for the default width.
+        SidebarResizer.DragStarted += (_, _) => (DataContext as MainWindowViewModel)?.BeginSidebarResize();
+        SidebarResizer.DragDelta += (_, e) => (DataContext as MainWindowViewModel)?.ResizeSidebar(e.Vector.X);
+        SidebarResizer.DragCompleted += (_, _) => (DataContext as MainWindowViewModel)?.EndSidebarResize();
+        SidebarResizer.DoubleTapped += (_, _) => (DataContext as MainWindowViewModel)?.ResetSidebarWidth();
     }
 
     // Tells the view model when the window is minimized (Settings › Pause when minimized).

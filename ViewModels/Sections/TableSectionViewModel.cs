@@ -14,8 +14,11 @@ namespace SysInfo.ViewModels.Sections;
 /// and « Voir les N autres lignes ». Sort and expansion survive refreshes. Columns can be resized (drag the edge of a
 /// header, double-click to fit) and hidden (header context menu); this layout is saved (<see cref="TableLayouts"/>).
 /// </summary>
-public partial class TableSectionViewModel : SectionViewModel
+public partial class TableSectionViewModel : SectionViewModel, Controls.IWideBlock
 {
+    /// <summary>A table with many visible columns spans every column of a wide page.</summary>
+    public bool IsWide => VisibleColumns.Count >= 8;
+
     private TableSection _data;
 
     public TableSectionViewModel(TableSection section) : base(section)

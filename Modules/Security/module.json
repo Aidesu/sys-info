@@ -11,18 +11,20 @@
     {
       "name": "get_logons",
       "title": "Connexions et échecs",
+      "help": "Ouvertures de session réussies et échouées sur la période : compte, origine, type de connexion. Beaucoup d'échecs peuvent signaler une tentative d'intrusion. Sous Windows, demande les droits administrateur.",
       "command": "Get-SILogons",
       "level": "L",
       "description": "Successful and failed logons of this computer over a time window: time, account, kind (local, remote desktop, SSH, unlock, sudo…), source address and result, newest first, plus failures grouped by account and source address. Windows reads the Security log (needs SysInfo to run as administrator); Linux reads wtmp (last) and the journal (sshd, PAM, sudo failures).",
       "parameters": [
         { "name": "sinceHours", "label": "Depuis (heures)", "type": "integer", "description": "Time window, in hours before now.", "minimum": 1, "maximum": 2160, "default": 168 },
         { "name": "result", "label": "Résultat", "type": "string", "description": "Keep successful logons, failed logons or both.", "enum": ["all", "success", "failed"], "default": "all" },
-        { "name": "top", "label": "Nombre max.", "type": "integer", "description": "Maximum number of logons returned.", "minimum": 1, "maximum": 1000, "default": 100 }
+        { "name": "top", "label": "Connexions affichées (max.)", "type": "integer", "description": "Maximum number of logons returned.", "minimum": 1, "maximum": 1000, "default": 100 }
       ]
     },
     {
       "name": "get_firewall_rules",
       "title": "Règles du pare-feu",
+      "help": "Règles du pare-feu, filtrées par sens (entrant/sortant), action et texte. Les règles trop larges (ouvertes à tout le monde, tous ports) sont signalées.",
       "command": "Get-SIFirewallRules",
       "level": "L",
       "description": "Firewall rules of this computer. Windows: enabled rules with direction, action, profiles, protocol, local ports, remote addresses and program, flagging broad inbound allow rules (any port, any address, public profile, program outside system folders). Linux: firewalld zones (interfaces, services, ports, rich rules) or ufw status.",
@@ -30,12 +32,13 @@
         { "name": "direction", "label": "Sens", "type": "string", "description": "Windows: inbound, outbound or all. Ignored on Linux (firewalld zones describe inbound traffic).", "enum": ["inbound", "outbound", "all"], "default": "inbound" },
         { "name": "action", "label": "Action", "type": "string", "description": "Windows: keep allow rules, block rules or both. Ignored on Linux.", "enum": ["allow", "block", "all"], "default": "allow" },
         { "name": "filter", "label": "Texte", "type": "string", "description": "Keep only rules whose name, program, service or port contains this text (case-insensitive)." },
-        { "name": "top", "label": "Nombre max.", "type": "integer", "description": "Maximum number of rules returned.", "minimum": 1, "maximum": 2000, "default": 200 }
+        { "name": "top", "label": "Règles affichées (max.)", "type": "integer", "description": "Maximum number of rules returned.", "minimum": 1, "maximum": 2000, "default": 200 }
       ]
     },
     {
       "name": "find_persistence",
       "title": "Points de persistance",
+      "help": "Liste tout ce qui se lance automatiquement (démarrage, services, tâches, extensions…) et signale ce qui est suspect. Cocher « Suspects seulement » pour ne garder que les éléments douteux.",
       "command": "Find-SIPersistence",
       "level": "L",
       "description": "Every place a program can start itself automatically, with the command and why it looks suspicious (temporary or public folder, encoded or downloading script, unsigned binary, missing file, hijacked logon or debugger key, WMI consumer, preloaded library). Windows: Run / RunOnce keys, startup folders, Winlogon, Image File Execution Options debuggers, AppInit_DLLs, non-Microsoft scheduled tasks, WMI event subscriptions. Linux: cron (system and own crontab), local systemd units (system and user), autostart desktop entries, rc.local, ld.so.preload.",
@@ -47,18 +50,20 @@
     {
       "name": "get_certificates",
       "title": "Certificats",
+      "help": "Certificats installés (personnels, racines de confiance…) avec leur date d'expiration ; ceux qui expirent bientôt ou les autorités racines ajoutées sont signalés.",
       "command": "Get-SICertificates",
       "level": "L",
       "description": "Certificates of this computer: subject, issuer, store, expiry date and days left, flagging expired or soon-expiring certificates and root certificates added locally (not shipped by Windows Update or the distribution), which can reveal TLS interception. Windows: LocalMachine and CurrentUser stores; Linux: system CA bundle and local trust anchors. Thumbprints and keys are never returned.",
       "parameters": [
         { "name": "scope", "label": "Magasins", "type": "string", "description": "personal = machine and user personal certificates (with a private key usage), roots = trusted roots and intermediate authorities, added = locally added roots only, all = everything.", "enum": ["personal", "roots", "added", "all"], "default": "personal" },
         { "name": "expiringDays", "label": "Expire sous (jours)", "type": "integer", "description": "Flag certificates expiring within this many days.", "minimum": 0, "maximum": 365, "default": 30 },
-        { "name": "top", "label": "Nombre max.", "type": "integer", "description": "Maximum number of certificates returned.", "minimum": 1, "maximum": 2000, "default": 200 }
+        { "name": "top", "label": "Certificats affichés (max.)", "type": "integer", "description": "Maximum number of certificates returned.", "minimum": 1, "maximum": 2000, "default": 200 }
       ]
     },
     {
       "name": "get_acl",
       "title": "Autorisations d'un dossier",
+      "help": "Montre qui a le droit de lire ou modifier un dossier ou un fichier, et signale les autorisations trop ouvertes (modifiable par tout le monde).",
       "command": "Get-SIAcl",
       "level": "L",
       "description": "Permissions of one file or folder: owner and access rules (identity, rights, allow / deny, inherited) on Windows; owner, group, mode and ACL entries (getfacl) on Linux. Flags write access granted to everyone or to all users. Only metadata is read, never the content.",
@@ -69,6 +74,7 @@
     {
       "name": "find_special_files",
       "title": "Fichiers SUID et modifiables par tous",
+      "help": "Linux : cherche les programmes à privilèges (SUID/SGID) et les fichiers modifiables par tous, en signalant ceux qui n'appartiennent à aucun paquet. Tâche longue sur un dossier large.",
       "command": "Find-SISpecialFiles",
       "level": "L",
       "long": true,
@@ -77,12 +83,13 @@
       "parameters": [
         { "name": "kind", "label": "Type", "type": "string", "description": "suid = SUID and SGID executables; writable = world-writable files and folders without the sticky bit.", "enum": ["suid", "writable"], "default": "suid" },
         { "name": "path", "label": "Dossier", "type": "string", "description": "Root of the search (stays on its file system).", "default": "/" },
-        { "name": "top", "label": "Nombre max.", "type": "integer", "description": "Maximum number of files returned.", "minimum": 1, "maximum": 2000, "default": 300 }
+        { "name": "top", "label": "Fichiers affichés (max.)", "type": "integer", "description": "Maximum number of files returned.", "minimum": 1, "maximum": 2000, "default": 300 }
       ]
     },
     {
       "name": "start_scan",
       "title": "Analyse antivirus rapide",
+      "help": "Lance une analyse antivirus rapide (Microsoft Defender sous Windows, ClamAV sous Linux). Tâche longue ; les menaces trouvées apparaissent dans les constats.",
       "command": "Start-SIAntivirusScan",
       "level": "A",
       "long": true,
@@ -92,6 +99,7 @@
     {
       "name": "update_signatures",
       "title": "Mettre à jour les signatures",
+      "help": "Met à jour les définitions de virus de l'antivirus. Nécessite Internet.",
       "command": "Update-SIAntivirusSignatures",
       "level": "A",
       "long": true,
@@ -101,6 +109,7 @@
     {
       "name": "set_firewall",
       "title": "Modifier le pare-feu",
+      "help": "Modifie le pare-feu : l'activer, le désactiver, ouvrir ou fermer un port. Action critique : droits administrateur ; désactiver le pare-feu expose la machine.",
       "command": "Set-SIFirewall",
       "level": "C",
       "description": "Changes the firewall. enable / disable: Windows profiles (Set-NetFirewallProfile), ufw, or the firewalld service. allow_port: opens an inbound port (Windows: a rule in the SysInfo group; firewalld: permanent port in the default zone; ufw allow). block_port: Windows blocking rule; Linux: removes the open port (ufw deny). remove_rule: Windows: deletes a rule of the SysInfo group only (ruleName); Linux: removes the port. Blocked when nothing would change (port already open by a range…) and for hand-written nftables rulesets. Reversible.",

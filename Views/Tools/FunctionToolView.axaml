@@ -20,6 +20,23 @@
         </Expander.Header>
         <StackPanel Spacing="{StaticResource Space12}">
 
+            <!-- Aide de l'outil (module.json › help) : repliée par défaut -->
+            <StackPanel Spacing="{StaticResource Space4}" IsVisible="{Binding HasHelp}">
+                <Button Classes="More" Command="{Binding ToggleHelpCommand}" HorizontalAlignment="Left"
+                        AutomationProperties.Name="Aide de l'outil">
+                    <StackPanel Orientation="Horizontal" Spacing="{StaticResource Space4}">
+                        <PathIcon Width="14" Height="14" Data="{StaticResource Icon.info}" />
+                        <TextBlock Text="À propos de cet outil" VerticalAlignment="Center" />
+                        <PathIcon Classes="MoreChevron" Classes.Open="{Binding IsHelpExpanded}"
+                                  Data="{StaticResource Icon.chevron_down}" />
+                    </StackPanel>
+                </Button>
+                <c:AnimatedHeight IsCollapsed="{Binding !IsHelpExpanded}">
+                    <SelectableTextBlock Classes="Body" Text="{Binding Help}" TextWrapping="Wrap"
+                                         Foreground="{DynamicResource TextSecondary}" Margin="0,0,0,4" />
+                </c:AnimatedHeight>
+            </StackPanel>
+
             <ItemsControl ItemsSource="{Binding Parameters}" IsVisible="{Binding HasParameters}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>

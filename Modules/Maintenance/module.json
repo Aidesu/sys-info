@@ -11,18 +11,20 @@
     {
       "name": "verify_system_files",
       "title": "Vérifier les fichiers système",
+      "help": "Vérifie que les fichiers du système n'ont pas été modifiés ou abîmés (SFC sous Windows ; paquets du système sous Linux). Tâche longue, rien n'est réparé : le résultat liste les fichiers en cause. Le champ limite le nombre de fichiers affichés.",
       "command": "Get-SISystemFileCheck",
       "level": "L",
       "long": true,
       "timeoutSeconds": 1800,
       "description": "Checks the integrity of the operating system files without repairing anything. Windows: sfc /verifyonly (needs administrator rights). Linux: rpm -Va (files whose content changed, configuration files excluded, with their package), debsums -s or pacman -Qkk. Takes several minutes.",
       "parameters": [
-        { "name": "top", "label": "Nombre max.", "type": "integer", "description": "Maximum number of modified files returned.", "minimum": 1, "maximum": 500, "default": 100 }
+        { "name": "top", "label": "Fichiers affichés (max.)", "type": "integer", "description": "Maximum number of modified files returned.", "minimum": 1, "maximum": 500, "default": 100 }
       ]
     },
     {
       "name": "repair_system_files",
       "title": "Réparer les fichiers système",
+      "help": "Répare les fichiers système abîmés trouvés par la vérification (SFC sous Windows ; réinstallation des paquets concernés sous Linux). Action critique et longue : droits administrateur, point de restauration avant.",
       "command": "Repair-SISystemFiles",
       "level": "C",
       "long": true,
@@ -32,6 +34,7 @@
     {
       "name": "check_windows_image",
       "title": "Vérifier l'image Windows",
+      "help": "Vérifie l'image Windows qui sert de modèle aux réparations (DISM). Tâche longue, rien n'est modifié. Windows uniquement, en administrateur.",
       "command": "Get-SIWindowsImageHealth",
       "level": "L",
       "long": true,
@@ -42,6 +45,7 @@
     {
       "name": "repair_windows_image",
       "title": "Réparer l'image Windows",
+      "help": "Répare l'image Windows (DISM RestoreHealth) ou nettoie les anciens composants. Action critique et longue (souvent plus de 10 minutes) : droits administrateur, point de restauration, connexion Internet.",
       "command": "Repair-SIWindowsImage",
       "level": "C",
       "long": true,
@@ -55,6 +59,7 @@
     {
       "name": "check_disk",
       "title": "Vérifier un disque",
+      "help": "Vérifie le système de fichiers d'un volume sans le réparer (chkdsk en lecture seule, ou l'outil du système de fichiers sous Linux). Laisser vide pour le volume système.",
       "command": "Test-SIDisk",
       "level": "L",
       "long": true,
@@ -67,6 +72,7 @@
     {
       "name": "schedule_disk_repair",
       "title": "Réparer un disque au démarrage",
+      "help": "Programme la réparation d'un volume au prochain démarrage (chkdsk /f), quand il ne peut pas être réparé pendant que Windows tourne. Action critique : le démarrage suivant sera plus long.",
       "command": "Set-SIDiskRepair",
       "level": "C",
       "platforms": ["windows"],
@@ -78,6 +84,7 @@
     {
       "name": "cleanup",
       "title": "Nettoyage",
+      "help": "Supprime des fichiers inutiles d'une catégorie (fichiers temporaires, caches, corbeille, anciens journaux…). « Simuler » donne la place libérée et la liste ; la corbeille vidée ne se récupère pas.",
       "command": "Clear-SIJunk",
       "level": "A",
       "description": "Frees disk space in one category: temp (temporary files older than 1 day on Windows, your own files older than 7 days in /tmp and /var/tmp on Linux), thumbnails (thumbnail cache), recycle (empties the recycle bin: permanent), packages (Windows Update downloads, or dnf / apt / pacman package cache; administrator), logs (old CBS / DISM logs on Windows; systemd journal beyond 500 MiB on Linux; administrator). Files in use are left. The preview gives the size freed.",
@@ -88,6 +95,7 @@
     {
       "name": "create_restore_point",
       "title": "Créer un point de restauration",
+      "help": "Crée un point de restauration du système (Restauration du système sous Windows ; snapper ou Timeshift sous Linux), à faire avant une intervention risquée. La description sert à le retrouver. Windows n'en crée qu'un par 24 h.",
       "command": "New-SIRestorePoint",
       "level": "A",
       "description": "Creates a restore point now (Windows System Restore, at most one per 24 h, the recent one is reused; snapper or Timeshift on Linux). Needs administrator rights. SysInfo also creates one automatically before each critical action.",
@@ -98,6 +106,7 @@
     {
       "name": "optimize_volume",
       "title": "Optimiser un volume",
+      "help": "Optimise un volume : TRIM pour un SSD, défragmentation pour un disque dur. Sans risque, mais le disque est occupé pendant l'opération.",
       "command": "Optimize-SIVolume",
       "level": "A",
       "description": "Optimizes one volume: TRIM on an SSD (tells it which blocks are free), defragmentation on a Windows hard disk. Windows: Optimize-Volume; Linux: fstrim. Needs administrator rights.",
@@ -108,6 +117,7 @@
     {
       "name": "reset_print_queue",
       "title": "Vider la file d'impression",
+      "help": "Vide la file d'impression et redémarre le service d'impression, quand un document bloque toutes les impressions. Les documents en attente sont supprimés : il faudra les relancer.",
       "command": "Reset-SIPrintSpooler",
       "level": "A",
       "description": "Cancels the pending print jobs and restarts the print spooler, to unblock a stuck printer. Windows: stops the Spooler, deletes spool\\PRINTERS, restarts it (administrator). Linux: cancel -a (all jobs as root, else your own) and restarts CUPS as root. The preview lists the jobs that will be cancelled."
@@ -115,6 +125,7 @@
     {
       "name": "rebuild_icon_cache",
       "title": "Reconstruire le cache d'icônes",
+      "help": "Reconstruit le cache des icônes de Windows quand des icônes s'affichent mal ou blanches. L'Explorateur redémarre (le bureau disparaît quelques secondes).",
       "command": "Reset-SIIconCache",
       "level": "A",
       "platforms": ["windows"],
@@ -123,6 +134,7 @@
     {
       "name": "repair_windows_update",
       "title": "Réparer Windows Update",
+      "help": "Remet Windows Update à zéro (services arrêtés, dossiers de téléchargement renommés, services relancés) quand les mises à jour échouent toujours. Action critique : l'historique local des mises à jour est perdu, elles seront retéléchargées.",
       "command": "Reset-SIWindowsUpdate",
       "level": "C",
       "platforms": ["windows"],
@@ -131,6 +143,7 @@
     {
       "name": "check_wmi",
       "title": "Vérifier WMI",
+      "help": "Vérifie la cohérence du dépôt WMI de Windows, utilisé par beaucoup d'outils (dont SysInfo). Rien n'est modifié.",
       "command": "Test-SIWmiRepository",
       "level": "L",
       "platforms": ["windows"],
@@ -139,6 +152,7 @@
     {
       "name": "repair_wmi",
       "title": "Réparer WMI",
+      "help": "Répare le dépôt WMI de Windows s'il est incohérent. Action critique : le service WMI redémarre, certains programmes peuvent devoir être relancés.",
       "command": "Repair-SIWmiRepository",
       "level": "C",
       "platforms": ["windows"],
@@ -147,6 +161,7 @@
     {
       "name": "schedule_restart",
       "title": "Redémarrage planifié",
+      "help": "Programme le redémarrage de l'ordinateur dans un délai en minutes (ou annule un redémarrage programmé). Les documents non enregistrés seront perdus : prévenir l'utilisateur.",
       "command": "Set-SIRestart",
       "level": "C",
       "restorePoint": false,

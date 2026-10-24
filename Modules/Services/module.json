@@ -11,6 +11,7 @@
     {
       "name": "list",
       "title": "Liste filtrée",
+      "help": "Liste les services filtrés par état (en cours, arrêté, en échec), type de démarrage et texte.",
       "command": "Get-SIServices",
       "level": "L",
       "description": "Lists the services of this computer with filters on state, startup type and name or description text: name, description, state, startup type, account, PID and binary path.",
@@ -23,6 +24,7 @@
     {
       "name": "get_service",
       "title": "Détail d'un service",
+      "help": "Détail d'un service : état, compte, programme lancé, services dont il dépend et qui dépendent de lui, réaction en cas d'échec, et ses dernières lignes de journal.",
       "command": "Get-SIServiceDetail",
       "level": "L",
       "description": "Details of one service of this computer: all properties (state, startup type, account, PID, binary, start time, last result), its dependencies in both directions (what it needs, what needs it), its recovery / restart options, and its latest log lines (systemd journal on Linux, Service Control Manager and its own events on Windows).",
@@ -34,6 +36,7 @@
     {
       "name": "control",
       "title": "Démarrer, arrêter ou redémarrer",
+      "help": "Démarre, arrête ou redémarre un service. Les services essentiels au système sont refusés ; « Simuler » montre aussi les services dépendants qui seront touchés.",
       "command": "Invoke-SIServiceControl",
       "level": "A",
       "description": "Starts, stops or restarts one service of this computer (its startup type is not changed). Windows: Start/Stop/Restart-Service, stopping dependent services too (needs administrator rights). Linux: systemctl start/stop/restart (needs root). The preview shows the service, its state, PID and the running services that depend on it; it is blocked for essential system or session services (RPC, LSM, D-Bus, journald, logind, display manager…), a service already in the requested state, a disabled or masked service, or missing rights. Returns the state and PID before and after.",
@@ -45,6 +48,7 @@
     {
       "name": "set_start_type",
       "title": "Type de démarrage",
+      "help": "Change le démarrage d'un service (automatique, manuel, désactivé). Action critique : droits administrateur, point de restauration avant.",
       "command": "Set-SIServiceStartType",
       "level": "C",
       "description": "Changes the startup type of one service (its current state does not change). Windows: Set-Service -StartupType: auto, auto_delayed, manual or disabled. Linux: systemctl enable (auto), disable (manual or disabled), mask (masked: cannot start at all), unmask. Never for essential system or session services. The preview shows the services that depend on it; reversible with the same action.",

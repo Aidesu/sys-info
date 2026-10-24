@@ -25,7 +25,7 @@
 | Pattern | MVVM avec CommunityToolkit.Mvvm (`[ObservableProperty]`, `[RelayCommand]`) |
 | Collecte | Modules PowerShell (`.psm1`) exécutés via `Microsoft.PowerShell.SDK` |
 | Éditeurs | VS Code (Linux) et Visual Studio (Windows) |
-| Distribution | `dotnet publish --self-contained` par OS (pas de single-file) |
+| Distribution | `dotnet publish --self-contained` par OS (pas de single-file) : `pwsh Packaging/publish.ps1` (§3.1) |
 
 ---
 
@@ -46,6 +46,7 @@ SysInfo/
 ├─ Services/
 │   ├─ PowerShellService.cs        → exécution PowerShell (runspace réutilisé, annulation, délai)
 │   ├─ ModuleRunner.cs             → trois runspaces par module : vue d'ensemble, fonctions, tâches longues
+│   ├─ ModuleHost.cs               → pont des modules d'agrégation vers les autres modules (lectures, §4.7)
 │   ├─ AuditLog.cs                 → journal d'audit JSONL (§4.5)
 │   ├─ RestorePoints.cs            → point de restauration avant une action critique (module Maintenance)
 │   └─ ModuleLoader.cs             → découverte et chargement des modules
@@ -61,12 +62,21 @@ SysInfo/
 │   └─ Memory/
 │       ├─ module.json
 │       └─ Memory.psm1
+├─ Packaging/                      → publication et installeurs (§3.1)
 └─ ai/                             → documentation pour les IA (ce fichier)
 ```
 
 **Flux :** `ModuleLoader` scanne `Modules/` → crée un `ModuleTabViewModel` par module compatible avec l'OS → l'onglet appelle `PowerShellService` → le psm1 renvoie des objets normalisés → la View les affiche via des DataTemplates génériques.
 
 Le dossier `Modules/` est copié à côté de l'exécutable (`CopyToOutputDirectory="PreserveNewest"` dans le `.csproj`).
+
+### 3.1 Distribution (ajouté le 2026-10-24, S8)
+
+- `pwsh Packaging/publish.ps1 [-Runtime win-x64,linux-x64,win-arm64,linux-arm64]` (Windows ou Linux) : build Release autonome par OS (aucun .NET à installer), dans `artifacts/` (ignoré par git) : dossier + `SysInfo-<version>-<rid>.zip` (Windows) ou `.tar.gz` (Linux, à construire sous Linux pour garder les droits d'exécution). Version : `<Version>` du `.csproj`. ~150 Mio installés, ~60 Mio d'archive (PowerShell et Skia : pas de trimming possible). Le script retire les `.pdb` natifs (Skia : 100 Mio) et les modules PowerShell de l'autre OS.
+- **Installation**, pour l'utilisateur courant, sans droits : Linux `./install.sh` (`~/.local/lib/SysInfo`, commande `~/.local/bin/sysinfo`, entrée de menu et icône ; `sudo ./install.sh --system` : `/opt/SysInfo`) ; Windows `powershell -ExecutionPolicy Bypass -File .\install.ps1` (`%LOCALAPPDATA%\Programs\SysInfo`, raccourci du menu Démarrer, fichiers débloqués). `--uninstall` / `-Uninstall`. Une mise à jour remplace tout le dossier ; réglages, historique et audit (dossiers de données) ne sont jamais touchés. L'installeur affiche la commande `claude mcp add sysinfo -- <chemin> --mcp`.
+- Icône : `Packaging/sysinfo.svg` (source), `Assets/sysinfo.ico` (fenêtres, `.exe`), `Packaging/sysinfo.png` (Linux).
+- **Piège** : dans un build publié, `$PSHOME` (dossier de `System.Management.Automation.dll`) est celui de l'exécutable, donc `$PSHOME/Modules` est le dossier des modules SysInfo et les modules intégrés de PowerShell (`Select-Object`…) seraient introuvables. `PowerShellService` met `runtimes/<os>/lib/net10.0/Modules` en tête de `PSModulePath`. Il coupe aussi la télémétrie de PowerShell (`POWERSHELL_TELEMETRY_OPTOUT`). Tester un build publié, pas seulement `dotnet run`.
+- Pas de signature de code : Windows SmartScreen avertit au premier lancement (« Informations complémentaires › Exécuter quand même »).
 
 ---
 
@@ -166,6 +176,8 @@ Un nouveau type de section = modification du C# (Model + DataTemplate). Ne pas e
 - `Icon` sur une section : nom d'icône affiché devant le titre de la carte. Noms disponibles (`Styles/Icons.axaml`) : `apps_list`, `arrow_clockwise`, `arrow_down`, `arrow_download`, `arrow_routing`, `arrow_sort`, `arrow_swap`, `arrow_up`, `board`, `checkmark_circle`, `chevron_down`, `chevron_up`, `desktop`, `developer_board`, `dismiss`, `error_circle`, `globe`, `hard_drive`, `info`, `link`, `lock_closed`, `network_check`, `panel_left_contract`, `panel_left_expand`, `pause`, `play`, `plug_connected`, `plug_disconnected`, `pulse`, `ram`, `re_order_dots_vertical`, `router`, `search`, `server`, `settings`, `shield_checkmark`, `temperature`, `timer`, `top_speed`, `warning`, `wifi_1`, `wifi_off`. Un nom inconnu est remplacé par `board` et signalé sur stderr.
 - Metric à deux séries : `Label` (nom de la série principale) et `Secondary = @{ Label = 'Émission'; Value = 1.2 }`. Elle s'affiche en graphique large (deux par ligne) avec une légende actuel / moyenne / maximum ; les seuils portent sur la série principale. Une valeur `$null` laisse un trou dans la courbe (ex. ping perdu).
 
+**`History` d'une `Metric`** (facultatif, ajouté au contrat le 2026-10-24, S5) : historique fourni par le module (ex. 24 h gardées sur disque) au lieu des valeurs accumulées à l'écran. `History = @{ Window = 86400; Points = @( @(1761300000, 12.5, 3.1), … ) }` : `Window` = durée couverte en secondes (finissant maintenant), chaque point = heure (secondes Unix, date ou texte ISO), valeur, seconde valeur si `Secondary` ; `$null` = trou (SysInfo fermé). Une telle Metric s'affiche en graphique large (comme une Metric à deux séries), statistiques sur les points fournis, y compris dans la carte « Outils ». Garder un volume raisonnable (≈ 100 points : regrouper par intervalles) : les points partent aussi au MCP.
+
 **`Usage`** (ajouté au contrat le 2026-10-22, module Stockage) : `Items` = liste d'éléments `@{ Label; Detail; Value; Max; Unit; Warning; Critical; Text }` — `Label` (ex. `/`), `Detail` sous le libellé (`btrfs · nvme0n1p3`), `Value` sur `Max` dans `Unit`, seuils facultatifs dans la même unité, `Text` libre sous la valeur (« 100 GiB libres sur 1,8 TiB »). L'état le plus grave des lignes remonte sur l'onglet.
 
 **`Findings`** (à côté de `Sections`, ajouté au contrat le 2026-10-23) : constats normalisés, ce qui demande attention ou action.
@@ -181,7 +193,7 @@ Findings = @(
 )
 ```
 
-- Un **code ne change jamais** une fois publié : l'IA agrège et priorise par code. Préfixe = module (`SYS`, `HW`, `NET`, `STO`, `EVT`, `SVC`, `SEC`, `SW`, `MNT`, `AUD`…).
+- Un **code ne change jamais** une fois publié : l'IA agrège et priorise par code. Préfixe = module (`SYS`, `HW`, `NET`, `STO`, `EVT`, `SVC`, `SEC`, `SW`, `MNT`, `PERF`, `SNS`, `BOOT`, `TSK`, `BAK`, `PRN`, `VIRT`, `CFG`, `INV`, `RPT`, `DIAG`, `AUD`).
 - Textes en français, déjà rédigés. Un constat par objet concerné (un par volume, un par disque).
 - Affichage : carte « Constats » en tête de page, les plus graves d'abord ; `warning` / `critical` remontent sur l'onglet (avec les seuils des Metric et Usage). `info` ne colore rien.
 - MCP : `status` de l'enveloppe = constat le plus grave (`ok`, `warning`, `critical`).
@@ -217,6 +229,7 @@ Findings = @(
 |---|---|
 | `name` | snake_case ; outil MCP `<id>_<name>` (ex. `system_get_processes`) |
 | `title` | facultatif, **en français** : nom de l'outil dans la carte « Outils » de la fenêtre (à défaut, `name`) |
+| `help` | facultatif, **en français** (ajouté le 2026-10-24) : aide de l'outil dans la carte « Outils », repliée par défaut (« À propos de cet outil ») : à quoi il sert, comment remplir les champs, ce que montre le résultat, précautions pour une action. Pas envoyé au MCP (l'IA lit `description`) |
 | `command` | fonction PowerShell du `.psm1`, nommée `<Verbe>-SI<Nom>` (ex. `Get-SIProcesses`), exportée |
 | `level` | `L` lecture · `A` action réversible · `C` action critique · `X` jamais en MCP. `A` et `C` : aperçu, confirmation, audit (§4.5) ; `C` exige en plus l'administrateur et un point de restauration, et n'est exposé en MCP que si l'utilisateur l'a activé |
 | `description` | en anglais, obligatoire : ce que renvoie la fonction et quand l'utiliser |
@@ -241,10 +254,12 @@ Règles :
 
 ### 4.6 Assistants de l'hôte et sobriété (ajouté le 2026-10-23)
 
-- SysInfo fournit des classes .NET aux modules (`Native/` : `SysInfo.Native.ProcessSampler`, `SysInfo.Native.CpuSampler`, `SysInfo.Storage.DirectorySizer`) pour les boucles coûteuses. Le module teste leur présence (`'Type' -as [type]`) et garde un repli PowerShell pour fonctionner seul dans `pwsh`.
+- SysInfo fournit des classes .NET aux modules (`SysInfo.Host.ModuleHost`, §4.7 ; `Native/` : `SysInfo.Native.QrCode` (QR code de l'étiquette d'inventaire), `SysInfo.Native.ProcessSampler` (dont `Shared`, un relevé partagé par les modules Système et Performance, et `ProcessSample::Heaviest`), `SysInfo.Native.CpuSampler` (dont `Limits`, fréquences et bridage), `SysInfo.Native.PerfSampler` (mémoire, disques, réseau, PSI), `SysInfo.Native.PdhQuery` (compteurs Windows sans WMI), `SysInfo.Native.PowerStatus` (batterie Windows), `SysInfo.Native.SysFs` (lecture groupée de fichiers /sys), `SysInfo.Native.DiskBenchmark`, `SysInfo.Storage.DirectorySizer`) pour les boucles coûteuses. Le module teste leur présence (`'Type' -as [type]`) et garde un repli PowerShell pour fonctionner seul dans `pwsh`.
 - Pas d'`Add-Type` au chargement d'un module (charge le compilateur, ~70 Mio) ; pas de requête WMI à chaque rafraîchissement court sous Windows (mettre en cache 60 s).
 - Une section dont les données sont en cache est elle aussi mise en cache (pas de tableau reconstruit toutes les 2 s) ; un résultat identique peut être réutilisé tel quel.
 - Pages masquées : rafraîchies 5 fois moins souvent (60 s au plus), réglage « Économiser les ressources ».
+- Outil externe : tester sa présence une fois (Get-Command coûte ~30 ms pour un outil absent) ; préférer un fichier à une commande quand l'état s'y lit (`/etc/tuned/active_profile` plutôt que `tuned-adm active`, ~150 ms).
+- Données persistantes d'un module (historique, réglages propres) : sous `[Environment]::GetFolderPath('LocalApplicationData')/SysInfo` (`history/`, `state/`), en JSONL, avec une rétention.
 
 ### 4.5 Actions (niveaux A et C, ajouté le 2026-10-23, sprints S4a et S4b)
 
@@ -268,6 +283,15 @@ Déroulé :
 
 ---
 
+### 4.7 Modules d'agrégation (ajouté le 2026-10-24, S7)
+
+Inventaire, Rapports et Diagnostic guidé lisent les autres modules au lieu de collecter eux-mêmes (« mêmes données que les pages ») :
+
+- Dans SysInfo : `[SysInfo.Host.ModuleHost]::Invoke(<appelant>, <module>, <fonction ou $null>, @{ paramètres }, <délai s>, <âge max s>)` et `::InvokeMany(<appelant>, @( @{ Module; Function; Parameters } … ), <délai>, <âge max>)` (en parallèle) passent par les `ModuleRunner` de la fenêtre ou du serveur MCP (mêmes runspaces, même cache). Une vue d'ensemble récente (âge max 0 = six fois l'intervalle de rafraîchissement, 60 s au moins) est reprise telle quelle. **Lectures seulement** : une fonction A, C ou X est refusée ; un module ne peut pas s'appeler lui-même ; les droits du module appelé s'appliquent.
+- Seul dans `pwsh` : le module importe les autres (`Import-Module -Prefix`) et appelle leurs fonctions (même résultat, plus lent).
+- Un module d'agrégation exclut les autres modules d'agrégation de ses relevés (pas de boucle).
+- Ses constats lui sont propres (préfixes `RPT`, `DIAG`, `INV`) : il ne recopie pas ceux des autres sur son onglet, sauf la fonction ciblée qui les liste (diagnostic global).
+
 ## 5. Règles côté C# / Avalonia
 
 - Bindings compilés : toujours `x:DataType` sur les vues.
@@ -287,9 +311,10 @@ Déroulé :
 - Design **sobre et soigné** : peu de couleurs, une couleur d'accent, typographie nette, espacements cohérents.
 - Éviter l'esthétique générique « template » : pas de dégradés gratuits, pas d'ombres partout, pas d'icônes décoratives inutiles.
 - Thème clair et sombre.
-- Les graphiques `Metric` gardent un historique court (ex. 60 points).
+- Les graphiques `Metric` gardent un historique court (ex. 60 points) ; l'historique long (24 h, 7 jours) est fourni par le module (`History`, §4.3) et s'affiche en graphique large.
 - **Listes longues** (2026-10-23) : un tableau montre 10 lignes (après tri), une liste clé → valeur 10 éléments, des jauges 6 lignes (celles en Attention / Critique restent toujours visibles), les constats les 3 plus graves ; le reste se déplie avec « Voir les N autres » (seulement s'il en reste plus de 1 ou 2). Rien à faire côté module : tout renvoyer, l'interface replie.
 - **Tableaux personnalisables** (2026-10-23) : glisser le bord d'un en-tête redimensionne la colonne (double-clic : largeur automatique) ; clic droit sur l'en-tête ou bouton ⚙ de la carte : afficher / masquer des colonnes, réinitialiser. Disposition gardée dans `settings.json` (`tableLayouts`), par titre et colonnes du tableau : un module n'a rien à faire, mais changer les libellés de colonnes repart de la disposition par défaut.
+- **Mise en page adaptative** (2026-10-24) : fenêtre de 720 px de large au moins (portrait possible). Les cartes d'une page sont sur une colonne sur un écran ordinaire ou en portrait, sur deux ou trois colonnes sur un écran très large (21:9, 32:9 : `Controls/MasonryPanel`, 820 px par colonne au moins) ; les groupes de Metric, les graphiques et les tableaux d'au moins 8 colonnes prennent toute la largeur (`IWideBlock`). Les cartes Metric et les graphiques passent à la ligne selon la largeur (`Controls/AdaptiveGrid` : 240 px par carte, 440 px par graphique, lignes équilibrées). Écart entre cartes 12 px, marge de page 20 px. La barre latérale démarre repliée ; dépliée, elle se redimensionne par son bord (168 à 420 px, gardé dans `settings.json`).
 - **Défilement au clic molette** (2026-10-23) : comme dans un navigateur (`Controls/AutoScroll`), vertical et horizontal ; clic simple = mode maintenu jusqu'au clic suivant ou Échap, clic-glisser = arrêt au relâchement.
 - **Animations** (2026-10-23) : `Controls/AnimatedHeight` fait glisser les changements de hauteur (constat qui apparaît ou disparaît, « Voir plus », tableau qui grandit) au lieu de faire sauter la page ; fondu à l'arrivée des données et entre les pages. Courtes (150 à 260 ms), jamais en boucle ; toutes coupées si l'OS demande moins d'animations (`MotionPreference`). Un constat n'est animé que si la page est affichée au moment où il change.
 

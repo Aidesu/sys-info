@@ -25,8 +25,16 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:UsageRow">
-                            <Grid ColumnDefinitions="220,*,200,104" ColumnSpacing="16"
+                            <!-- Libellé, jauge, valeur : se partagent la largeur (fixes sur une page large, resserrés en portrait) ;
+                                 badge de largeur fixe pour aligner les jauges d'une ligne à l'autre -->
+                            <Grid ColumnSpacing="12"
                                   Classes.Warning="{Binding IsWarning}" Classes.Critical="{Binding IsCritical}">
+                                  <Grid.ColumnDefinitions>
+                                      <ColumnDefinition Width="2*" MinWidth="110" MaxWidth="220" />
+                                      <ColumnDefinition Width="3*" MinWidth="80" />
+                                      <ColumnDefinition Width="2*" MinWidth="110" MaxWidth="200" />
+                                      <ColumnDefinition Width="96" />
+                                  </Grid.ColumnDefinitions>
                                 <StackPanel VerticalAlignment="Center" Spacing="2">
                                     <TextBlock Classes="Value" Text="{Binding Label}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Label}" />
                                     <TextBlock Classes="Caption" Text="{Binding Detail}" IsVisible="{Binding HasDetail}"
@@ -72,8 +80,16 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:UsageRow">
-                            <Grid ColumnDefinitions="220,*,200,104" ColumnSpacing="16"
+                            <!-- Libellé, jauge, valeur : se partagent la largeur (fixes sur une page large, resserrés en portrait) ;
+                                 badge de largeur fixe pour aligner les jauges d'une ligne à l'autre -->
+                            <Grid ColumnSpacing="12"
                                   Classes.Warning="{Binding IsWarning}" Classes.Critical="{Binding IsCritical}">
+                                  <Grid.ColumnDefinitions>
+                                      <ColumnDefinition Width="2*" MinWidth="110" MaxWidth="220" />
+                                      <ColumnDefinition Width="3*" MinWidth="80" />
+                                      <ColumnDefinition Width="2*" MinWidth="110" MaxWidth="200" />
+                                      <ColumnDefinition Width="96" />
+                                  </Grid.ColumnDefinitions>
                                 <StackPanel VerticalAlignment="Center" Spacing="2">
                                     <TextBlock Classes="Value" Text="{Binding Label}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Label}" />
                                     <TextBlock Classes="Caption" Text="{Binding Detail}" IsVisible="{Binding HasDetail}"

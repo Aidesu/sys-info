@@ -7,12 +7,13 @@
              x:DataType="vm:MetricGroupViewModel">
 
     <!-- Rangée de cartes Metric de même largeur, puis, aligné sous chacune, le graphique de son historique -->
-    <StackPanel Spacing="{StaticResource Space16}">
+    <StackPanel Spacing="{StaticResource Space12}">
 
         <ItemsControl ItemsSource="{Binding Metrics}">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
-                    <UniformGrid Columns="{Binding Columns}" ColumnSpacing="16" RowSpacing="16" /> <!-- = Space16 -->
+                    <!-- Autant de cartes par ligne que la largeur le permet (240 px au moins chacune) -->
+                    <c:AdaptiveGrid MaxColumns="{Binding MaxColumns}" MinItemWidth="240" ColumnSpacing="12" RowSpacing="12" />
                 </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
         </ItemsControl>
@@ -20,7 +21,7 @@
         <ItemsControl ItemsSource="{Binding Metrics}">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
-                    <UniformGrid Columns="{Binding Columns}" ColumnSpacing="16" RowSpacing="16" />
+                    <c:AdaptiveGrid MaxColumns="{Binding MaxColumns}" MinItemWidth="240" ColumnSpacing="12" RowSpacing="12" />
                 </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
@@ -43,7 +44,7 @@
                                      Window="{Binding ChartWindow}"
                                          Maximum="{Binding ChartMaximum}"
                                          Unit="{Binding Unit}"
-                                         Capacity="{x:Static vm:MetricSectionViewModel.HistoryLength}"
+                                         Capacity="{Binding ChartCapacity}"
                                          AutomationProperties.Name="{Binding Title, StringFormat='Historique : {0}'}" />
 
                             <UniformGrid Columns="3" ColumnSpacing="12" IsVisible="{Binding HasStatistics}">

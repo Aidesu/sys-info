@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace SysInfo.ViewModels.Sections;
@@ -6,15 +7,16 @@ namespace SysInfo.ViewModels.Sections;
 /// Consecutive Metric sections shown together: one row of equal-width metric cards,
 /// and under each card the chart of its history, aligned column by column.
 /// </summary>
-public sealed class MetricGroupViewModel(IReadOnlyList<MetricSectionViewModel> metrics) : ViewModelBase
+public sealed class MetricGroupViewModel(IReadOnlyList<MetricSectionViewModel> metrics) : ViewModelBase, Controls.IWideBlock
 {
     public IReadOnlyList<MetricSectionViewModel> Metrics { get; } = metrics;
 
-    /// <summary>Columns of the grid: up to 3 metrics side by side, then a new line.</summary>
-    public int Columns => Metrics.Count switch
-    {
-        <= 3 => Metrics.Count,
-        4 => 2,
-        _ => 3,
-    };
+    /// <summary>
+    /// Most cards per row: all of them when the page is wide enough (<see cref="Controls.AdaptiveGrid"/> reduces it on a
+    /// narrow page and balances the rows).
+    /// </summary>
+    public int MaxColumns => Math.Max(1, Metrics.Count);
+
+    /// <summary>Spans every column of a wide page (the cards then line up across it); a lone metric stays in one column.</summary>
+    public bool IsWide => Metrics.Count >= 2;
 }

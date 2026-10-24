@@ -14,6 +14,7 @@
     {
       "name": "ping",
       "title": "Ping",
+      "help": "Envoie des pings à une machine (nom ou adresse) pour savoir si elle répond et en combien de temps. « Nombre de pings » : combien d'essais ; « Délai » : temps d'attente maximal par réponse. Beaucoup de serveurs bloquent le ping : tester aussi un port.",
       "command": "Get-SIPing",
       "level": "L",
       "description": "Pings a host (name or IP) from this computer: each reply with its time, then sent/received counts, loss and min/avg/max time. Use it to check whether a host is reachable and how fast.",
@@ -27,7 +28,7 @@
         },
         {
           "name": "count",
-          "label": "Nombre",
+          "label": "Nombre de pings",
           "type": "integer",
           "description": "Number of pings.",
           "minimum": 1,
@@ -48,6 +49,7 @@
     {
       "name": "traceroute",
       "title": "Traceroute",
+      "help": "Montre le chemin (les routeurs successifs) jusqu'à une destination et le temps de chacun, pour voir où une connexion ralentit ou s'arrête. « Sauts max. » limite la longueur du chemin.",
       "command": "Get-SITraceroute",
       "level": "L",
       "dependencies": [
@@ -77,6 +79,7 @@
     {
       "name": "test_port",
       "title": "Test de port TCP",
+      "help": "Teste si un service répond sur une machine : par exemple le port 443 (site web), 3389 (bureau à distance), 445 (partage de fichiers). Le résultat dit si le port est ouvert, fermé ou filtré par un pare-feu.",
       "command": "Test-SIPort",
       "level": "L",
       "description": "Tests a TCP connection from this computer to host:port and reports whether the port is open, closed (refused) or filtered (no answer), with the connection time. Use it when ping is blocked or to check a service (web, SSH, RDP, SMB…).",
@@ -111,6 +114,7 @@
     {
       "name": "test_mtu",
       "title": "MTU du chemin",
+      "help": "Trouve la taille maximale des paquets qui passent sans être découpés jusqu'à une destination. Utile quand certains sites ou un VPN se chargent mal.",
       "command": "Get-SIPathMtu",
       "level": "L",
       "description": "Measures the path MTU from this computer to a host: the largest packet that passes without fragmentation (1500 on a normal Ethernet path, less behind PPPoE or a VPN).",
@@ -127,6 +131,7 @@
     {
       "name": "get_public_ip",
       "title": "Adresse IP publique",
+      "help": "Donne l'adresse IP publique de la connexion (celle vue par Internet) et le fournisseur d'accès. Nécessite Internet.",
       "command": "Get-SIPublicIp",
       "level": "L",
       "description": "Public IPv4 and IPv6 addresses of this computer as seen from the Internet, with their reverse DNS name. Calls the external service api.ipify.org."
@@ -134,6 +139,7 @@
     {
       "name": "discover_lan",
       "title": "Découverte du réseau local",
+      "help": "Recherche les appareils présents sur le réseau local (ordinateurs, imprimantes, box, objets connectés) : adresse, nom et fabricant quand ils sont connus. Tâche longue ; « Délai du ping » règle l'attente de chaque appareil.",
       "command": "Get-SILanDevices",
       "level": "L",
       "long": true,
@@ -156,6 +162,7 @@
     {
       "name": "resolve_dns",
       "title": "Requête DNS",
+      "help": "Interroge le DNS pour un nom (ex. www.exemple.fr) : adresses obtenues et temps de réponse. On peut choisir le type d'enregistrement (A, MX…) et un serveur DNS précis pour comparer.",
       "command": "Resolve-SIDns",
       "level": "L",
       "dependencies": [
@@ -199,6 +206,7 @@
     {
       "name": "flush_dns",
       "title": "Vider le cache DNS",
+      "help": "Vide le cache DNS de l'ordinateur, pour qu'un site ou un serveur qui a changé d'adresse soit de nouveau trouvé. Sans risque : les noms sont résolus à nouveau, un peu plus lentement au début.",
       "command": "Clear-SIDnsCache",
       "level": "A",
       "description": "Flushes the local DNS cache of this computer, so that names are resolved again by the DNS server (useful after a site or DNS server changed address, or a stale or poisoned answer). Windows: ipconfig /flushdns; Linux: systemd-resolved (resolvectl flush-caches) or nscd. The preview shows the cache in use and a resolution test; blocked when there is no local cache."
@@ -206,6 +214,7 @@
     {
       "name": "renew_dhcp",
       "title": "Renouveler le bail DHCP",
+      "help": "Redemande une adresse IP à la box ou au serveur DHCP, quand l'adresse est fausse ou expirée. La connexion est coupée quelques secondes. Laisser vide pour la connexion principale.",
       "command": "Update-SIDhcpLease",
       "level": "A",
       "description": "Asks the DHCP server again for an IPv4 address on one interface (default: the main connection), to recover from a wrong or expired address. The connection is cut for a few seconds. Windows: ipconfig /renew (needs administrator rights); Linux: NetworkManager reactivates the connection (nmcli connection up). The preview shows the interface, current address, DHCP server and lease end; blocked for a static address or an interface NetworkManager does not manage. Returns the address and lease before and after.",
@@ -221,6 +230,7 @@
     {
       "name": "reset_stack",
       "title": "Réinitialiser la pile réseau",
+      "help": "Remet les réglages réseau de Windows à zéro (Winsock, TCP/IP) en dernier recours quand plus rien ne se connecte. Action critique : redémarrage nécessaire, les réglages réseau manuels sont perdus.",
       "command": "Reset-SINetworkStack",
       "level": "C",
       "platforms": [
@@ -231,6 +241,7 @@
     {
       "name": "set_adapter",
       "title": "Désactiver / réactiver une carte réseau",
+      "help": "Désactive ou réactive une carte réseau. Désactiver la connexion principale coupe le réseau (et une prise en main à distance) : action critique, droits administrateur.",
       "command": "Set-SINetworkAdapter",
       "level": "C",
       "description": "Disables or re-enables one network adapter. Windows: Disable-NetAdapter / Enable-NetAdapter. Linux: nmcli device disconnect / connect (NetworkManager). Disabling the adapter of the main connection cuts the network. Reversible with the same action.",

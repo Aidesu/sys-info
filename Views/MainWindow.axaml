@@ -7,10 +7,10 @@
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
         x:Class="SysInfo.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Icon="/Assets/avalonia-logo.ico"
+        Icon="/Assets/sysinfo.ico"
         Title="SysInfo"
         Width="1280" Height="800"
-        MinWidth="1024" MinHeight="700"
+        MinWidth="720" MinHeight="560"
         Background="{DynamicResource Background}"
         Foreground="{DynamicResource TextPrimary}">
 
@@ -55,19 +55,31 @@
     </Window.Resources>
 
     <Window.Styles>
-        <!-- Barre latérale : SidebarWidth, repliée à SidebarWidthCollapsed (icônes seules) -->
-        <Style Selector="Border.Sidebar">
-            <Setter Property="Width" Value="{StaticResource SidebarWidth}" />
-        </Style>
-        <Style Selector=".Animate Border.Sidebar">
+        <!-- Barre latérale : largeur choisie en tirant son bord (SidebarCurrentWidth), repliée à 56 (icônes seules) ;
+             animée au repli, pas pendant qu'on la tire -->
+        <Style Selector=".Animate Border.Sidebar:not(.resizing)">
             <Setter Property="Transitions">
                 <Transitions>
                     <DoubleTransition Property="Width" Duration="{StaticResource DurationBase}" />
                 </Transitions>
             </Setter>
         </Style>
-        <Style Selector="Border.Sidebar.collapsed">
-            <Setter Property="Width" Value="{StaticResource SidebarWidthCollapsed}" />
+        <!-- Bord de la barre latérale : poignée de redimensionnement (trait d'accent au survol) -->
+        <Style Selector="Thumb.SidebarResizer">
+            <Setter Property="Width" Value="6" />
+            <Setter Property="Margin" Value="-4,0,-2,0" />
+            <Setter Property="Cursor" Value="SizeWestEast" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="Transparent">
+                        <Border Name="PART_Line" Width="2" HorizontalAlignment="Center" Background="Transparent" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Thumb.SidebarResizer:pointerover /template/ Border#PART_Line, Thumb.SidebarResizer:pressed /template/ Border#PART_Line">
+            <Setter Property="Background" Value="{DynamicResource Accent}" />
         </Style>
         <Style Selector="Border.Sidebar.collapsed :is(Control).Brand, Border.Sidebar.collapsed TextBlock.NavLabel, Border.Sidebar.collapsed Panel.NavStatusHost">
             <Setter Property="IsVisible" Value="False" />
@@ -121,7 +133,11 @@
         </Style>
 
         <!-- Onglets : 36 px, TextSecondary ; survol SurfaceHover ; actif AccentMuted, icône Accent -->
+        <!-- Liste des modules : défilement à la molette (ou clic molette), sans barre de défilement : posée sur les
+             icônes de la barre repliée, elle les masquait -->
         <Style Selector="ListBox.Nav">
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Hidden" />
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Padding" Value="0" />
@@ -162,6 +178,8 @@
         <Border DockPanel.Dock="Left"
                 Classes="Sidebar"
                 Classes.collapsed="{Binding IsSidebarCollapsed}"
+                Classes.resizing="{Binding IsSidebarResizing}"
+                Width="{Binding SidebarCurrentWidth}"
                 Padding="8,12"
                 Background="{DynamicResource Background}"
                 BorderBrush="{DynamicResource Border}"
@@ -203,6 +221,13 @@
                          AutomationProperties.Name="Modules" />
             </DockPanel>
         </Border>
+
+        <!-- Poignée sur le bord droit de la barre dépliée : tirer pour la redimensionner, double-clic : largeur par défaut.
+             Absente quand la barre est repliée. -->
+        <Thumb Name="SidebarResizer" DockPanel.Dock="Left" Classes="SidebarResizer"
+               IsVisible="{Binding !IsSidebarCollapsed}"
+               ToolTip.Tip="Tirer pour redimensionner · double-clic : largeur par défaut"
+               AutomationProperties.Name="Redimensionner la barre latérale" />
 
         <!-- Page active : un module ou Paramètres (ViewLocator : …ViewModel → …View), fondu enchaîné au changement
              d'onglet (retiré si l'OS demande moins d'animations) -->
